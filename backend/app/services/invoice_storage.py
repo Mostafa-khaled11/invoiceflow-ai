@@ -9,6 +9,8 @@ logic.
 """
 
 import os
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import BinaryIO, Final
 from uuid import uuid4
@@ -73,6 +75,19 @@ class InvoiceStorage:
         """Delete a staged file if it still exists."""
 
         staged.unlink(missing_ok=True)
+
+    @contextmanager
+    def open_for_read(self, key: str) -> Iterator[BinaryIO]:
+        """Open an internally keyed stored file without exposing its path."""
+
+        try:
+            source = self._resolve(key).open("rb")
+        except OSError as exc:
+            raise InvoiceStorageError("stored invoice file unavailable") from exc
+        try:
+            yield source
+        finally:
+            source.close()
 
     def abandon(self, staged: Path, key: str) -> None:
         """Clean up after a failed commit: drop staged and moved files.

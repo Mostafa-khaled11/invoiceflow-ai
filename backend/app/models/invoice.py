@@ -7,6 +7,7 @@ not be added here until their schema tasks are designed.
 
 from datetime import datetime
 from enum import StrEnum
+from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
@@ -18,9 +19,12 @@ from sqlalchemy import (
     Uuid,
     func,
 )
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+
+if TYPE_CHECKING:
+    from app.models.invoice_text_extraction import InvoiceTextExtraction
 
 
 class InvoiceStatus(StrEnum):
@@ -32,6 +36,9 @@ class InvoiceStatus(StrEnum):
     """
 
     RECEIVED = "received"
+    TEXT_EXTRACTED = "text_extracted"
+    NEEDS_OCR = "needs_ocr"
+    EXTRACTION_FAILED = "extraction_failed"
 
 
 class Invoice(Base):
@@ -39,7 +46,12 @@ class Invoice(Base):
 
     __tablename__ = "invoices"
     __table_args__ = (
-        CheckConstraint("status in ('received')", name="ck_invoices_status"),
+        CheckConstraint(
+            "status in ("
+            "'received', 'text_extracted', 'needs_ocr', 'extraction_failed'"
+            ")",
+            name="ck_invoices_status",
+        ),
         UniqueConstraint("sha256", name="uq_invoices_sha256"),
         UniqueConstraint("storage_key", name="uq_invoices_storage_key"),
     )
@@ -58,4 +70,9 @@ class Invoice(Base):
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+    text_extraction: Mapped["InvoiceTextExtraction | None"] = relationship(
+        back_populates="invoice",
+        uselist=False,
+        cascade="all, delete-orphan",
     )

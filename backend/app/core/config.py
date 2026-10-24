@@ -22,6 +22,8 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
     invoice_storage_path: Path = Path("storage")
     """Private root for stored invoice PDFs; never exposed via static routes."""
+    max_invoice_pages: int = 50
+    min_extracted_text_chars: int = 50
 
     @property
     def cors_origin_list(self) -> list[str]:

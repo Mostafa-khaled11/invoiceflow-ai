@@ -44,7 +44,7 @@ later implementation phases.
 
 - Docker Desktop with Docker Compose v2
 - Python 3.12+ for host-side backend checks
-- Node.js 22+ and npm for host-side frontend checks
+- Node.js 20.19+ (or 22.12+) and npm for host-side frontend checks
 
 ## Environment setup
 
@@ -64,6 +64,12 @@ PDFs are stored. The default `storage` location resolves relative to the
 working directory for host-side runs; the Compose `api` service overrides it
 with an absolute path on the `invoice_uploads` named volume. The directory is
 never served by static routes or exposed in API responses.
+
+The digital-text extraction baseline is configured with `MAX_INVOICE_PAGES=50`
+and `MIN_EXTRACTED_TEXT_CHARS=50`. A PDF with enough non-whitespace text is
+classified as `text_extracted`; insufficient digital text is classified as
+`needs_ocr` for a later OCR task. No OCR or structured invoice extraction is
+performed here.
 
 ## Run locally with Docker
 
@@ -110,12 +116,13 @@ pyright backend
 ```
 
 The PostgreSQL readiness integration test is skipped when `DATABASE_URL` is not
-available to the test process. To run it against the Compose database from a
-shell that has the environment loaded, use the database URL with `db` replaced
-by `localhost`:
+available to the test process. The standard Compose file keeps PostgreSQL on
+the internal Compose network, so host-side integration tests require either an
+existing local PostgreSQL instance or a temporary local port mapping. With the
+database mapped to host port `15432`, use:
 
 ```powershell
-$env:TEST_DATABASE_URL = "postgresql+psycopg://invoiceflow:<local-password>@localhost:5432/invoiceflow"
+$env:TEST_DATABASE_URL = "postgresql+psycopg://invoiceflow:<local-password>@127.0.0.1:15432/invoiceflow"
 python -m pytest backend/tests/test_ready_integration.py -m integration
 ```
 
@@ -136,6 +143,7 @@ npm run build
 | GET | `/api/v1/ready` | API plus PostgreSQL readiness check; returns 503 when unavailable |
 | POST | `/api/v1/invoices/upload` | Validates and stores one PDF invoice (max 10 MB); returns 201 with stored metadata, or 409 when the same PDF content already exists |
 | GET | `/api/v1/invoices/{invoice_id}` | Returns stored invoice metadata; 404 when unknown |
+| POST | `/api/v1/invoices/{invoice_id}/extract-text` | Extracts and persists PDF digital-text metadata; does not return raw text |
 
 Duplicate prevention is content-based: the SHA-256 digest of the uploaded
 PDF is unique at the database level, so uploading identical bytes again
@@ -148,8 +156,6 @@ next to `INVOICE_STORAGE_PATH`, then atomically renamed to
 row is inserted. If anything fails before the commit, the transaction rolls
 back and both the staged and the moved file are removed, so a rejected or
 failed intake leaves neither a duplicate record nor an orphan file.
-| POST | `/api/v1/invoices/upload` | Intake validation for one PDF invoice (max 10 MB); returns upload metadata, no persistence yet |
-
 The health response is:
 
 ```json
@@ -174,8 +180,8 @@ The health response is:
 ## Current limitations
 
 This release includes PDF upload intake with private storage, PostgreSQL
-persistence, and SHA-256 duplicate prevention. It deliberately does not
-include invoice extraction, validation rules, PDF download streaming,
-authentication, authorization, worker processing, approval actions, or n8n
-integration. Those features require the next design and implementation tasks
-described in the project documents.
+persistence, SHA-256 duplicate prevention, and deterministic pypdf text-layer
+extraction. It deliberately does not include OCR, structured invoice field
+extraction, validation rules, PDF download streaming, authentication,
+authorization, worker processing, approval actions, or n8n integration. Those
+features require later implementation tasks described in the project documents.

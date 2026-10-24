@@ -22,3 +22,9 @@ def get_invoice_storage(request: Request) -> InvoiceStorage:
 
     settings: Settings = request.app.state.settings
     return InvoiceStorage(settings.invoice_storage_path)
+
+
+def get_app_settings(request: Request) -> Settings:
+    """Return the request application's immutable settings object."""
+
+    return request.app.state.settings
