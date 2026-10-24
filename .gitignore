@@ -32,7 +32,5 @@ storage/
 .DS_Store
 Thumbs.db
 
+# Temporary browser test profile
 .edge-profile/
-.env
-.env.*
-! .env.example
