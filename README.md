@@ -21,9 +21,12 @@ later implementation phases.
 ├── backend/
 │   ├── app/
 │   │   ├── api/v1/endpoints/health.py
+│   │   ├── api/v1/endpoints/invoices.py
 │   │   ├── core/config.py
 │   │   ├── db/session.py
-│   │   └── main.py
+│   │   ├── models/invoice.py
+│   │   ├── schemas/invoices.py
+│   │   └── services/
 │   ├── alembic/
 │   ├── tests/
 │   ├── Dockerfile
@@ -55,6 +58,12 @@ Copy-Item .env.example .env
 
 If the password contains reserved URL characters, URL-encode it in
 `DATABASE_URL`.
+
+`INVOICE_STORAGE_PATH` selects the private directory where validated invoice
+PDFs are stored. The default `storage` location resolves relative to the
+working directory for host-side runs; the Compose `api` service overrides it
+with an absolute path on the `invoice_uploads` named volume. The directory is
+never served by static routes or exposed in API responses.
 
 ## Run locally with Docker
 
@@ -125,6 +134,20 @@ npm run build
 | --- | --- | --- |
 | GET | `/api/v1/health` | Lightweight API liveness check |
 | GET | `/api/v1/ready` | API plus PostgreSQL readiness check; returns 503 when unavailable |
+| POST | `/api/v1/invoices/upload` | Validates and stores one PDF invoice (max 10 MB); returns 201 with stored metadata, or 409 when the same PDF content already exists |
+| GET | `/api/v1/invoices/{invoice_id}` | Returns stored invoice metadata; 404 when unknown |
+
+Duplicate prevention is content-based: the SHA-256 digest of the uploaded
+PDF is unique at the database level, so uploading identical bytes again
+returns a 409 conflict with the existing invoice id and stores no second
+file. Different PDFs may freely reuse the same original filename.
+
+Storage strategy: accepted PDFs are written to a private staging directory
+next to `INVOICE_STORAGE_PATH`, then atomically renamed to
+`<invoice_uuid>.pdf` inside the same transaction window in which the invoice
+row is inserted. If anything fails before the commit, the transaction rolls
+back and both the staged and the moved file are removed, so a rejected or
+failed intake leaves neither a duplicate record nor an orphan file.
 | POST | `/api/v1/invoices/upload` | Intake validation for one PDF invoice (max 10 MB); returns upload metadata, no persistence yet |
 
 The health response is:
@@ -150,7 +173,9 @@ The health response is:
 
 ## Current limitations
 
-This release deliberately does not include invoice schema/migrations, PDF
-uploads, extraction, validation rules, authentication, authorization, worker
-processing, approval actions, or n8n integration. Those features require the
-next design and implementation tasks described in the project documents.
+This release includes PDF upload intake with private storage, PostgreSQL
+persistence, and SHA-256 duplicate prevention. It deliberately does not
+include invoice extraction, validation rules, PDF download streaming,
+authentication, authorization, worker processing, approval actions, or n8n
+integration. Those features require the next design and implementation tasks
+described in the project documents.

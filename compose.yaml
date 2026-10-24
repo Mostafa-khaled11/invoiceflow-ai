@@ -22,6 +22,9 @@ services:
       ENVIRONMENT: ${ENVIRONMENT:-development}
       DATABASE_URL: ${DATABASE_URL}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
+      INVOICE_STORAGE_PATH: /var/lib/invoiceflow/invoices
+    volumes:
+      - invoice_uploads:/var/lib/invoiceflow/invoices
     ports:
       - "8000:8000"
     depends_on:
@@ -56,3 +59,4 @@ services:
 
 volumes:
   postgres_data:
+  invoice_uploads:
