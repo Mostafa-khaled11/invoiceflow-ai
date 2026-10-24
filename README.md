@@ -125,6 +125,7 @@ npm run build
 | --- | --- | --- |
 | GET | `/api/v1/health` | Lightweight API liveness check |
 | GET | `/api/v1/ready` | API plus PostgreSQL readiness check; returns 503 when unavailable |
+| POST | `/api/v1/invoices/upload` | Intake validation for one PDF invoice (max 10 MB); returns upload metadata, no persistence yet |
 
 The health response is:
 
