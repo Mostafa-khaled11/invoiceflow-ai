@@ -1,0 +1,56 @@
+[build-system]
+requires = ["setuptools>=75.0", "wheel>=0.45"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "invoiceflow-api"
+version = "0.1.0"
+description = "FastAPI foundation for InvoiceFlow AI"
+requires-python = ">=3.12"
+dependencies = [
+  "alembic==1.17.2",
+  "fastapi==0.158.1",
+  "psycopg[binary]==3.2.10",
+  "pydantic-settings==2.11.0",
+  "sqlalchemy==2.0.55",
+  "uvicorn[standard]==0.37.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "httpx==0.28.1",
+  "pyright==1.1.407",
+  "pytest==8.4.2",
+  "pytest-cov==6.2.1",
+  "ruff==0.14.2",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "-ra"
+markers = [
+  "integration: requires a reachable PostgreSQL database",
+]
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+src = ["app", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.pyright]
+include = ["app", "tests"]
+exclude = ["alembic"]
+pythonVersion = "3.12"
+typeCheckingMode = "basic"
+reportMissingImports = "error"
+reportMissingTypeStubs = false
