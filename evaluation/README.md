@@ -1,8 +1,8 @@
 # Synthetic invoice evaluation dataset
 
-This package generates the deterministic `invoice-eval-v1` dataset used by the
-future extraction evaluation task. It does not call Groq and does not calculate
-evaluation metrics.
+This package generates the deterministic `invoice-eval-v1` dataset and provides
+the structured extraction evaluation engine. Dataset generation and automated
+tests do not call Groq.
 
 ## Generate
 
@@ -27,6 +27,33 @@ evaluation/
 Each invoice directory contains `invoice.pdf`, `invoice.txt`,
 `ground_truth.json`, and `metadata.json`. The full `generated/` directory is
 ignored by Git. Five representative samples are retained under `samples/`.
+
+## Structured extraction evaluator (Task 4.2B)
+
+The evaluator runs against `invoice-eval-v1` without PostgreSQL. `llm-only` reads
+`invoice.txt`; `end-to-end` uses production-style pypdf extraction from
+`invoice.pdf`. Both reuse the production prompt, schema, semantic validation,
+and provider abstraction.
+
+The default split is development. Holdout requires `--allow-holdout`; it is
+never selected implicitly. Dry-run makes zero provider calls:
+
+```powershell
+python -m evaluation.run_benchmark --split development --mode llm-only --limit 5 --dry-run
+python -m evaluation.run_benchmark --split development --mode llm-only --limit 5
+python -m evaluation.run_benchmark --split holdout --mode end-to-end --limit 5 --allow-holdout
+```
+
+The second command is the explicit real-provider smoke benchmark and requires
+`GROQ_API_KEY`. `--no-cache` forces calls and consumes quota. Cache entries are
+inspectable JSON under `evaluation/cache/`, keyed by input SHA-256, provider,
+model, prompt version, and schema version. Corrupt entries are safe misses.
+
+Each run writes `run_config.json`, `predictions.jsonl`, `errors.json`,
+`metrics.json`, and `report.md` under `evaluation/results/`. Metrics include
+reliability, normalized field accuracy, core exact match, null accuracy,
+hallucination rate, line items, percentiles, usage, and metadata segments.
+Automated tests use fake providers and never call Groq.
 
 The fixed v1 dataset has 60 invoices: 40 development and 20 holdout. Template
 E is holdout-only. Ground truth is validated against the production

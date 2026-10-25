@@ -28,6 +28,8 @@ storage/
 
 # Full synthetic evaluation dataset (representative samples remain tracked).
 evaluation/generated/
+evaluation/cache/
+evaluation/results/
 
 # IDE and OS
 .idea/
