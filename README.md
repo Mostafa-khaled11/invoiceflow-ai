@@ -68,8 +68,24 @@ never served by static routes or exposed in API responses.
 The digital-text extraction baseline is configured with `MAX_INVOICE_PAGES=50`
 and `MIN_EXTRACTED_TEXT_CHARS=50`. A PDF with enough non-whitespace text is
 classified as `text_extracted`; insufficient digital text is classified as
-`needs_ocr` for a later OCR task. No OCR or structured invoice extraction is
-performed here.
+`needs_ocr` for a later OCR task. No OCR is performed by this PDF text-layer
+stage.
+
+Structured extraction is configured for Groq with
+`GROQ_MODEL=openai/gpt-oss-120b`, prompt version `invoice-extraction-v1`, and
+schema version `invoice-schema-v1`. `GROQ_API_KEY` is server-side only and must
+never be placed in React or committed to Git. Requests use non-streaming strict
+JSON Schema output with temperature 0. Invoice text is passed as untrusted
+document data, separate from the system prompt.
+
+The structured-extraction input limit is `MAX_LLM_INPUT_CHARS=20000`; oversized
+text is rejected and persisted as `llm_input_too_large` rather than truncated.
+Transient provider failures retry at most `LLM_MAX_RETRIES=2` times with
+exponential backoff. Successful results are idempotent for the same text
+extraction, provider, model, prompt version, and schema version. Missing values
+remain `null`. The schema covers vendor identity, invoice number/dates, purchase
+order, currency, subtotal/discount/tax/shipping/total, line items, and a small
+controlled warning-code list. Business arithmetic validation is not implemented.
 
 ## Run locally with Docker
 
@@ -115,6 +131,17 @@ python -m ruff format --check backend
 pyright backend
 ```
 
+The default test suite uses a fake provider and does not call Groq. An optional
+synthetic live smoke test can be run once, only when explicitly enabled:
+
+```powershell
+$env:RUN_LIVE_LLM_TESTS = "1"
+$env:GROQ_API_KEY = "<your-local-key>"
+python -m pytest backend/tests/test_live_groq.py -m integration
+```
+
+Never use confidential invoice text for this test.
+
 The PostgreSQL readiness integration test is skipped when `DATABASE_URL` is not
 available to the test process. The standard Compose file keeps PostgreSQL on
 the internal Compose network, so host-side integration tests require either an
@@ -144,6 +171,7 @@ npm run build
 | POST | `/api/v1/invoices/upload` | Validates and stores one PDF invoice (max 10 MB); returns 201 with stored metadata, or 409 when the same PDF content already exists |
 | GET | `/api/v1/invoices/{invoice_id}` | Returns stored invoice metadata; 404 when unknown |
 | POST | `/api/v1/invoices/{invoice_id}/extract-text` | Extracts and persists PDF digital-text metadata; does not return raw text |
+| POST | `/api/v1/invoices/{invoice_id}/extract-structured` | Extracts versioned structured invoice data through Groq; does not return raw text or prompts |
 
 Duplicate prevention is content-based: the SHA-256 digest of the uploaded
 PDF is unique at the database level, so uploading identical bytes again
@@ -180,8 +208,9 @@ The health response is:
 ## Current limitations
 
 This release includes PDF upload intake with private storage, PostgreSQL
-persistence, SHA-256 duplicate prevention, and deterministic pypdf text-layer
-extraction. It deliberately does not include OCR, structured invoice field
-extraction, validation rules, PDF download streaming, authentication,
-authorization, worker processing, approval actions, or n8n integration. Those
-features require later implementation tasks described in the project documents.
+persistence, SHA-256 duplicate prevention, deterministic pypdf text-layer
+extraction, and Groq-backed structured extraction with application format
+validation. It deliberately does not include OCR, business arithmetic
+validation, PDF download streaming, authentication, authorization, worker
+processing, approval actions, or n8n integration. Those features require later
+implementation tasks described in the project documents.

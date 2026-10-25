@@ -23,6 +23,14 @@ services:
       DATABASE_URL: ${DATABASE_URL}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
       INVOICE_STORAGE_PATH: /var/lib/invoiceflow/invoices
+      LLM_PROVIDER: ${LLM_PROVIDER:-groq}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      GROQ_MODEL: ${GROQ_MODEL:-openai/gpt-oss-120b}
+      LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-30}
+      LLM_MAX_RETRIES: ${LLM_MAX_RETRIES:-2}
+      MAX_LLM_INPUT_CHARS: ${MAX_LLM_INPUT_CHARS:-20000}
+      INVOICE_EXTRACTION_PROMPT_VERSION: ${INVOICE_EXTRACTION_PROMPT_VERSION:-invoice-extraction-v1}
+      INVOICE_EXTRACTION_SCHEMA_VERSION: ${INVOICE_EXTRACTION_SCHEMA_VERSION:-invoice-schema-v1}
     volumes:
       - invoice_uploads:/var/lib/invoiceflow/invoices
     ports:

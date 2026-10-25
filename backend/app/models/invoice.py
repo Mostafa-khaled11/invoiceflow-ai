@@ -1,8 +1,7 @@
 """Invoice persistence model.
 
-Deliberately limited to intake metadata: extraction fields (vendor, invoice
-number, totals, dates, OCR text, AI output) belong to later tasks and must
-not be added here until their schema tasks are designed.
+The invoice row retains intake metadata and lifecycle state; text and structured
+extraction payloads live in their dedicated one-to-one/versioned tables.
 """
 
 from datetime import datetime
@@ -24,6 +23,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base
 
 if TYPE_CHECKING:
+    from app.models.invoice_structured_extraction import InvoiceStructuredExtraction
     from app.models.invoice_text_extraction import InvoiceTextExtraction
 
 
@@ -39,6 +39,7 @@ class InvoiceStatus(StrEnum):
     TEXT_EXTRACTED = "text_extracted"
     NEEDS_OCR = "needs_ocr"
     EXTRACTION_FAILED = "extraction_failed"
+    STRUCTURED_EXTRACTED = "structured_extracted"
 
 
 class Invoice(Base):
@@ -48,7 +49,8 @@ class Invoice(Base):
     __table_args__ = (
         CheckConstraint(
             "status in ("
-            "'received', 'text_extracted', 'needs_ocr', 'extraction_failed'"
+            "'received', 'text_extracted', 'needs_ocr', 'extraction_failed', "
+            "'structured_extracted'"
             ")",
             name="ck_invoices_status",
         ),
@@ -74,5 +76,9 @@ class Invoice(Base):
     text_extraction: Mapped["InvoiceTextExtraction | None"] = relationship(
         back_populates="invoice",
         uselist=False,
+        cascade="all, delete-orphan",
+    )
+    structured_extractions: Mapped[list["InvoiceStructuredExtraction"]] = relationship(
+        back_populates="invoice",
         cascade="all, delete-orphan",
     )

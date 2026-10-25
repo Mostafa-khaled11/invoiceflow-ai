@@ -3,6 +3,7 @@
 from functools import lru_cache
 from pathlib import Path
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -24,6 +25,14 @@ class Settings(BaseSettings):
     """Private root for stored invoice PDFs; never exposed via static routes."""
     max_invoice_pages: int = 50
     min_extracted_text_chars: int = 50
+    llm_provider: str = "groq"
+    groq_api_key: str | None = None
+    groq_model: str = "openai/gpt-oss-120b"
+    llm_timeout_seconds: float = Field(default=30.0, gt=0)
+    llm_max_retries: int = Field(default=2, ge=0)
+    max_llm_input_chars: int = Field(default=20_000, gt=0)
+    invoice_extraction_prompt_version: str = "invoice-extraction-v1"
+    invoice_extraction_schema_version: str = "invoice-schema-v1"
 
     @property
     def cors_origin_list(self) -> list[str]:

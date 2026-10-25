@@ -8,7 +8,12 @@ from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_app_settings, get_db, get_invoice_storage
+from app.api.deps import (
+    get_app_settings,
+    get_db,
+    get_invoice_llm_provider,
+    get_invoice_storage,
+)
 from app.core.config import Settings
 from app.models.invoice import Invoice, InvoiceStatus
 from app.models.invoice_text_extraction import (
@@ -20,6 +25,7 @@ from app.schemas.invoices import (
     InvoiceResponse,
     InvoiceTextExtractionResponse,
 )
+from app.schemas.structured_extractions import StructuredExtractionResponse
 from app.services.invoice_files import (
     UploadValidationError,
     validate_invoice_pdf,
@@ -28,8 +34,13 @@ from app.services.invoice_intake import (
     InvoiceDuplicateError,
     receive_invoice,
 )
+from app.services.invoice_llm import InvoiceLLMProvider
 from app.services.invoice_storage import InvoiceStorage, InvoiceStorageError
 from app.services.invoice_text_extraction import InvoiceTextExtractor
+from app.services.structured_invoice_extraction import (
+    StructuredExtractionServiceError,
+    StructuredInvoiceExtractionService,
+)
 
 router = APIRouter(prefix="/invoices", tags=["invoices"])
 
@@ -212,3 +223,27 @@ def _extraction_response(
         error_code=extraction.error_code,
         processing_ms=extraction.processing_ms,
     )
+
+
+@router.post(
+    "/{invoice_id}/extract-structured",
+    summary="Extract structured invoice data with the configured LLM",
+    response_model=StructuredExtractionResponse,
+)
+def extract_invoice_structured(
+    invoice_id: UUID,
+    session: Annotated[Session, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_app_settings)],
+    provider: Annotated[InvoiceLLMProvider, Depends(get_invoice_llm_provider)],
+) -> StructuredExtractionResponse:
+    """Run auditable structured extraction without returning source text."""
+
+    try:
+        return StructuredInvoiceExtractionService(session, provider, settings).extract(
+            invoice_id
+        )
+    except StructuredExtractionServiceError as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail={"code": exc.error_code, "message": exc.message},
+        ) from exc
