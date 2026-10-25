@@ -110,6 +110,10 @@ def build_invoice_specs(seed: int = 42) -> list[InvoiceSpec]:
         date_format_name, date_formatter = DATE_FORMATS[
             (number + seed) % len(DATE_FORMATS)
         ]
+        if date_format_name == "slash":
+            invoice_date, due_date = _make_slash_dates_unambiguous(
+                invoice_date, due_date
+            )
         currency_case = (
             "ambiguous_symbol" if number in ambiguous_currency else "explicit"
         )
@@ -206,6 +210,7 @@ def build_invoice_specs(seed: int = 42) -> list[InvoiceSpec]:
             has_shipping=has_shipping,
             currency_case=currency_case,
             date_format=date_format_name,
+            date_ambiguity="none",
             adversarial=adversarial_case,
             multi_page=number in multi_page,
             tax_presentation=tax_presentation,
@@ -242,6 +247,20 @@ def build_invoice_specs(seed: int = 42) -> list[InvoiceSpec]:
             )
         )
     return specs
+
+
+def _make_slash_dates_unambiguous(
+    invoice_date: date, due_date: date
+) -> tuple[date, date]:
+    """Choose a stable slash-date pair whose day components are both > 12."""
+
+    offset = due_date - invoice_date
+    for day in range(13, 29):
+        candidate = invoice_date.replace(day=day)
+        candidate_due = candidate + offset
+        if candidate.day > 12 and candidate_due.day > 12:
+            return candidate, candidate_due
+    raise ValueError("could not construct an unambiguous slash-date pair")
 
 
 def _difficulty_plan() -> dict[int, Difficulty]:

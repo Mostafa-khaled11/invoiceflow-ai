@@ -81,11 +81,11 @@ class GroundTruthProvider:
         )
 
 
-def test_selection_dry_run_and_holdout_guard() -> None:
+def test_selection_dry_run_and_holdout_guard(tmp_path: Path) -> None:
     assert [p.name for p in select_documents(DATASET, limit=5)] == [
         f"invoice_{i:03d}" for i in range(1, 6)
     ]
-    result = dry_run(DATASET, limit=5)
+    result = dry_run(DATASET, limit=5, cache_dir=tmp_path / "cache")
     assert result["provider_calls_required"] == 5
     with pytest.raises(EvaluationConfigurationError, match="allow-holdout"):
         select_documents(DATASET, split="holdout")

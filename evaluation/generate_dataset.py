@@ -63,7 +63,11 @@ def _write_spec(spec: InvoiceSpec, directory: Path) -> None:
         encoding="utf-8",
     )
     (directory / "metadata.json").write_text(
-        json.dumps(spec.metadata.model_dump(mode="json"), indent=2, sort_keys=True)
+        json.dumps(
+            spec.metadata.model_dump(mode="json", exclude_defaults=True),
+            indent=2,
+            sort_keys=True,
+        )
         + "\n",
         encoding="utf-8",
     )

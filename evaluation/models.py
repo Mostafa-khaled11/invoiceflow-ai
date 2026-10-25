@@ -21,6 +21,7 @@ TemplateName = Literal[
     "template_a", "template_b", "template_c", "template_d", "template_e"
 ]
 CurrencyCase = Literal["explicit", "ambiguous_symbol"]
+DateAmbiguity = Literal["none", "slash_day_month_ambiguous"]
 LineItemGroup = Literal["1", "2-3", "4-5", "6-10"]
 
 
@@ -44,6 +45,7 @@ class DatasetMetadata(BaseModel):
     has_shipping: bool
     currency_case: CurrencyCase
     date_format: str
+    date_ambiguity: DateAmbiguity = "none"
     adversarial: bool
     multi_page: bool
     tax_presentation: Literal["line_items", "summary"]

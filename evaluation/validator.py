@@ -114,6 +114,7 @@ def _validate_record(
         )
     if metadata.multi_page != (len(reader.pages) > 1):
         raise DatasetValidationError(f"{directory}: multi-page metadata mismatch")
+    _validate_date_ambiguity(directory, metadata, ground_truth)
     _validate_financial_consistency(directory, ground_truth)
     if (
         metadata.currency_case == "ambiguous_symbol"
@@ -121,6 +122,34 @@ def _validate_record(
     ):
         raise DatasetValidationError(f"{directory}: ambiguous currency must be null")
     return metadata, ground_truth
+
+
+def _validate_date_ambiguity(
+    directory: Path, metadata: DatasetMetadata, ground_truth: StructuredInvoiceData
+) -> None:
+    """Prevent accidental locale-dependent slash dates in the benchmark."""
+
+    if metadata.date_format != "slash":
+        return
+    if metadata.date_ambiguity == "slash_day_month_ambiguous":
+        if ground_truth.invoice_date is not None:
+            raise DatasetValidationError(
+                f"{directory}: ambiguous invoice date must have null ground truth"
+            )
+        if "ambiguous_invoice_date" not in ground_truth.warnings:
+            raise DatasetValidationError(
+                f"{directory}: ambiguous invoice date warning is missing"
+            )
+    elif metadata.date_ambiguity != "none":
+        raise DatasetValidationError(f"{directory}: unsupported date ambiguity case")
+    for label, value in (
+        ("invoice date", ground_truth.invoice_date),
+        ("due date", ground_truth.due_date),
+    ):
+        if value is not None and int(value[8:10]) <= 12:
+            raise DatasetValidationError(
+                f"{directory}: slash {label} is ambiguous from document text"
+            )
 
 
 def _validate_financial_consistency(
