@@ -1,0 +1,11 @@
+{
+  "include": ["evaluation"],
+  "exclude": ["backend/alembic"],
+  "extraPaths": ["backend"],
+  "pythonVersion": "3.12",
+  "venvPath": ".",
+  "venv": ".venv",
+  "typeCheckingMode": "basic",
+  "reportMissingTypeStubs": false,
+  "reportMissingModuleSource": false
+}

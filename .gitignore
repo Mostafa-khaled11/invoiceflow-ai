@@ -26,6 +26,9 @@ storage/
 *.sqlite3
 *.log
 
+# Full synthetic evaluation dataset (representative samples remain tracked).
+evaluation/generated/
+
 # IDE and OS
 .idea/
 .vscode/

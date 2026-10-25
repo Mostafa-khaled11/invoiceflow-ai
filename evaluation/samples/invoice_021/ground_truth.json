@@ -1,0 +1,41 @@
+{
+  "currency": "CAD",
+  "discount_total": "87.05",
+  "due_date": "2026-04-15",
+  "invoice_date": "2026-03-16",
+  "invoice_number": "AC-8473",
+  "line_items": [
+    {
+      "description": "Data Migration Engagement 021-1",
+      "discount": "41.50",
+      "line_total": "827.93",
+      "quantity": "2.00",
+      "tax": "39.43",
+      "unit_price": "415.00"
+    },
+    {
+      "description": "Workflow Automation Engagement 021-2",
+      "discount": "13.25",
+      "line_total": "264.34",
+      "quantity": "1.00",
+      "tax": "12.59",
+      "unit_price": "265.00"
+    },
+    {
+      "description": "Platform Configuration Engagement 021-3",
+      "discount": "32.30",
+      "line_total": "644.39",
+      "quantity": "1.00",
+      "tax": "30.69",
+      "unit_price": "646.00"
+    }
+  ],
+  "purchase_order_number": null,
+  "shipping_total": "35.00",
+  "subtotal": "1741.00",
+  "tax_total": "82.71",
+  "total_amount": "1771.66",
+  "vendor_name": "Cedar Ridge Technology",
+  "vendor_tax_id": "SYN-TAX-702877",
+  "warnings": []
+}

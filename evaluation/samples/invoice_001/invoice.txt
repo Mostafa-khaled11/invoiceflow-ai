@@ -1,0 +1,17 @@
+INVOICE
+Vendor: Cedar Ridge Technology
+Address: 100 Synthetic Business Park
+Invoice Number: AC-8213
+Invoice Date: Jan 04, 2026
+Vendor Tax ID: SYN-TAX-700137
+Due Date: Feb 18, 2026
+Currency: CAD
+
+Description | Quantity | Unit Price | Discount | Tax | Line Total
+Data Analytics Consulting Engagement 001-1 | 3.00 | $634.00 | — | $190.20 | $2,092.20
+
+Subtotal: $1,902.00
+Tax: $190.20
+Shipping: $35.00
+Total: $2,127.20
+Thank you for your business.

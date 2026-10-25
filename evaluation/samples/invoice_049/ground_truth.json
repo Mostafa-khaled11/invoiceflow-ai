@@ -1,0 +1,25 @@
+{
+  "currency": "EUR",
+  "discount_total": "47.40",
+  "due_date": null,
+  "invoice_date": "2026-04-04",
+  "invoice_number": "Q4-2026-8837",
+  "line_items": [
+    {
+      "description": "Data Analytics Consulting Engagement 049-1",
+      "discount": "47.40",
+      "line_total": "990.66",
+      "quantity": "1.00",
+      "tax": "90.06",
+      "unit_price": "948.00"
+    }
+  ],
+  "purchase_order_number": null,
+  "shipping_total": null,
+  "subtotal": "948.00",
+  "tax_total": "90.06",
+  "total_amount": "990.66",
+  "vendor_name": "Northstar Analytics",
+  "vendor_tax_id": "SYN-TAX-706713",
+  "warnings": []
+}

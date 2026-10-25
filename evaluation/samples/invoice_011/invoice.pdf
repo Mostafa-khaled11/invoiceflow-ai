@@ -1,0 +1,124 @@
+%PDF-1.4
+%“Œ‹ž ReportLab Generated PDF document (opensource)
+1 0 obj
+<<
+/F1 2 0 R /F2 3 0 R
+>>
+endobj
+2 0 obj
+<<
+/BaseFont /Helvetica /Encoding /WinAnsiEncoding /Name /F1 /Subtype /Type1 /Type /Font
+>>
+endobj
+3 0 obj
+<<
+/BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding /Name /F2 /Subtype /Type1 /Type /Font
+>>
+endobj
+4 0 obj
+<<
+/Contents 8 0 R /MediaBox [ 0 0 612 792 ] /Parent 7 0 R /Resources <<
+/Font 1 0 R /ProcSet [ /PDF /Text /ImageB /ImageC /ImageI ]
+>> /Rotate 0 /Trans <<
+
+>> 
+  /Type /Page
+>>
+endobj
+5 0 obj
+<<
+/PageMode /UseNone /Pages 7 0 R /Type /Catalog
+>>
+endobj
+6 0 obj
+<<
+/Author (InvoiceFlow Evaluation Generator) /CreationDate (D:20000101000000+00'00') /Creator (InvoiceFlow Evaluation Generator) /Keywords () /ModDate (D:20000101000000+00'00') /Producer (ReportLab PDF Library - \(opensource\)) 
+  /Subject (Synthetic invoice benchmark) /Title (InvoiceFlow Synthetic Invoice) /Trapped /False
+>>
+endobj
+7 0 obj
+<<
+/Count 1 /Kids [ 4 0 R ] /Type /Pages
+>>
+endobj
+8 0 obj
+<<
+/Length 1901
+>>
+stream
+1 0 0 1 0 0 cm  BT /F1 12 Tf 14.4 TL ET
+.945098 .960784 .976471 rg
+n 0 672 612 120 re f*
+.058824 .462745 .431373 rg
+BT /F2 25 Tf 30 TL ET
+BT 1 0 0 1 44 737 Tm (invoice) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.2 .254902 .333333 rg
+BT 1 0 0 1 44 716 Tm (Harbor Point Analytics) Tj T* ET
+.2 .254902 .333333 rg
+BT /F1 9 Tf 10.8 TL ET
+BT 1 0 0 1 245.431 744 Tm (Invoice date: Feb 10, 2026) Tj T* ET
+BT 1 0 0 1 249.454 731 Tm (Purchase order: PO-8187) Tj T* ET
+BT 1 0 0 1 219.943 718 Tm (Vendor tax ID: SYN-TAX-701507) Tj T* ET
+BT 1 0 0 1 291.493 705 Tm (Currency: CAD) Tj T* ET
+.2 .254902 .333333 rg
+BT /F1 9 Tf 10.8 TL ET
+BT 1 0 0 1 40 647 Tm (Invoice date: Feb 10, 2026) Tj T* ET
+BT 1 0 0 1 40 634 Tm (Purchase order: PO-8187) Tj T* ET
+BT 1 0 0 1 40 621 Tm (Vendor tax ID: SYN-TAX-701507) Tj T* ET
+BT 1 0 0 1 40 608 Tm (Currency: CAD) Tj T* ET
+.058824 .462745 .431373 rg
+BT /F2 8 Tf 9.6 TL ET
+BT 1 0 0 1 40 557 Tm (Description) Tj T* ET
+BT 1 0 0 1 373.664 557 Tm (Qty) Tj T* ET
+BT 1 0 0 1 411.448 557 Tm (Unit) Tj T* ET
+BT 1 0 0 1 487.888 557 Tm (Total) Tj T* ET
+n 40 552 m 572 552 l S
+BT /F1 8 Tf 9.6 TL ET
+.058824 .090196 .164706 rg
+BT 1 0 0 1 40 537 Tm (Platform Configuration Engagement 011-1) Tj T* ET
+BT 1 0 0 1 371.432 537 Tm (2.00) Tj T* ET
+BT 1 0 0 1 398.088 537 Tm ($329.00) Tj T* ET
+BT 1 0 0 1 478.088 537 Tm ($756.70) Tj T* ET
+.2 .254902 .333333 rg
+BT /F1 9 Tf 10.8 TL ET
+BT 1 0 0 1 468.979 493 Tm (Subtotal) Tj T* ET
+BT 1 0 0 1 539.474 493 Tm ($658.00) Tj T* ET
+BT 1 0 0 1 486.997 478 Tm (Tax) Tj T* ET
+BT 1 0 0 1 544.478 478 Tm ($98.70) Tj T* ET
+BT 1 0 0 1 466.981 463 Tm (Shipping) Tj T* ET
+BT 1 0 0 1 544.478 463 Tm ($35.00) Tj T* ET
+.058824 .462745 .431373 rg
+BT /F2 13 Tf 15.6 TL ET
+BT 1 0 0 1 458.671 446 Tm (TOTAL) Tj T* ET
+BT 1 0 0 1 525.018 446 Tm ($791.70) Tj T* ET
+.392157 .454902 .545098 rg
+BT /F1 7 Tf 8.4 TL ET
+BT 1 0 0 1 40 28 Tm (Synthetic invoice for offline evaluation) Tj T* ET
+ 
+endstream
+endobj
+xref
+0 9
+0000000000 65535 f 
+0000000061 00000 n 
+0000000102 00000 n 
+0000000209 00000 n 
+0000000321 00000 n 
+0000000514 00000 n 
+0000000582 00000 n 
+0000000926 00000 n 
+0000000985 00000 n 
+trailer
+<<
+/ID 
+[<0d0009957f0e65fcf794ae9e1dc0babb><0d0009957f0e65fcf794ae9e1dc0babb>]
+% ReportLab generated PDF document -- digest (opensource)
+
+/Info 6 0 R
+/Root 5 0 R
+/Size 9
+>>
+startxref
+2937
+%%EOF

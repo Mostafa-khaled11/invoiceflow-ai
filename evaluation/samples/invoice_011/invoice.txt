@@ -1,0 +1,17 @@
+INVOICE
+Vendor: Harbor Point Analytics
+Address: 100 Synthetic Business Park
+Invoice Number: AC-8343
+Invoice Date: Feb 10, 2026
+Vendor Tax ID: SYN-TAX-701507
+Purchase Order: PO-8187
+Currency: CAD
+
+Description | Quantity | Unit Price | Discount | Tax | Line Total
+Platform Configuration Engagement 011-1 | 2.00 | $329.00 | — | $98.70 | $756.70
+
+Subtotal: $658.00
+Tax: $98.70
+Shipping: $35.00
+Total: $791.70
+Thank you for your business.

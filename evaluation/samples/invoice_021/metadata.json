@@ -1,0 +1,20 @@
+{
+  "adversarial": false,
+  "currency_case": "explicit",
+  "dataset_version": "invoice-eval-v1",
+  "date_format": "short_month",
+  "difficulty": "medium",
+  "has_discount": true,
+  "has_due_date": true,
+  "has_po_number": false,
+  "has_shipping": true,
+  "has_vendor_tax_id": true,
+  "invoice_id": "invoice_021",
+  "line_item_count": 3,
+  "line_item_group": "2-3",
+  "multi_page": false,
+  "schema_version": "invoice-schema-v1",
+  "split": "development",
+  "tax_presentation": "line_items",
+  "template": "template_c"
+}

@@ -1,0 +1,20 @@
+{
+  "adversarial": false,
+  "currency_case": "explicit",
+  "dataset_version": "invoice-eval-v1",
+  "date_format": "day_month_name",
+  "difficulty": "medium",
+  "has_discount": true,
+  "has_due_date": false,
+  "has_po_number": false,
+  "has_shipping": false,
+  "has_vendor_tax_id": true,
+  "invoice_id": "invoice_049",
+  "line_item_count": 1,
+  "line_item_group": "1",
+  "multi_page": false,
+  "schema_version": "invoice-schema-v1",
+  "split": "holdout",
+  "tax_presentation": "line_items",
+  "template": "template_e"
+}

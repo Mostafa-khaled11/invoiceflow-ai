@@ -1,0 +1,25 @@
+{
+  "currency": "CAD",
+  "discount_total": null,
+  "due_date": null,
+  "invoice_date": "2026-02-10",
+  "invoice_number": "AC-8343",
+  "line_items": [
+    {
+      "description": "Platform Configuration Engagement 011-1",
+      "discount": null,
+      "line_total": "756.70",
+      "quantity": "2.00",
+      "tax": "98.70",
+      "unit_price": "329.00"
+    }
+  ],
+  "purchase_order_number": "PO-8187",
+  "shipping_total": "35.00",
+  "subtotal": "658.00",
+  "tax_total": "98.70",
+  "total_amount": "791.70",
+  "vendor_name": "Harbor Point Analytics",
+  "vendor_tax_id": "SYN-TAX-701507",
+  "warnings": []
+}

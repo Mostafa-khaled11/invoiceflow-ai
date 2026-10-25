@@ -1,0 +1,134 @@
+%PDF-1.4
+%“Œ‹ž ReportLab Generated PDF document (opensource)
+1 0 obj
+<<
+/F1 2 0 R /F2 3 0 R
+>>
+endobj
+2 0 obj
+<<
+/BaseFont /Helvetica /Encoding /WinAnsiEncoding /Name /F1 /Subtype /Type1 /Type /Font
+>>
+endobj
+3 0 obj
+<<
+/BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding /Name /F2 /Subtype /Type1 /Type /Font
+>>
+endobj
+4 0 obj
+<<
+/Contents 8 0 R /MediaBox [ 0 0 612 792 ] /Parent 7 0 R /Resources <<
+/Font 1 0 R /ProcSet [ /PDF /Text /ImageB /ImageC /ImageI ]
+>> /Rotate 0 /Trans <<
+
+>> 
+  /Type /Page
+>>
+endobj
+5 0 obj
+<<
+/PageMode /UseNone /Pages 7 0 R /Type /Catalog
+>>
+endobj
+6 0 obj
+<<
+/Author (InvoiceFlow Evaluation Generator) /CreationDate (D:20000101000000+00'00') /Creator (InvoiceFlow Evaluation Generator) /Keywords () /ModDate (D:20000101000000+00'00') /Producer (ReportLab PDF Library - \(opensource\)) 
+  /Subject (Synthetic invoice benchmark) /Title (InvoiceFlow Synthetic Invoice) /Trapped /False
+>>
+endobj
+7 0 obj
+<<
+/Count 1 /Kids [ 4 0 R ] /Type /Pages
+>>
+endobj
+8 0 obj
+<<
+/Length 2367
+>>
+stream
+1 0 0 1 0 0 cm  BT /F1 12 Tf 14.4 TL ET
+0 0 0 rg
+BT /F2 15 Tf 18 TL ET
+BT 1 0 0 1 36 750 Tm (Cedar Ridge Technology) Tj T* ET
+BT /F1 8 Tf 9.6 TL ET
+BT 1 0 0 1 516.864 750 Tm (Invoice AC-8473) Tj T* ET
+n 36 740 m 576 740 l S
+.2 .254902 .333333 rg
+BT /F1 8 Tf 9.6 TL ET
+BT 1 0 0 1 36 720 Tm (Invoice date: Mar 16, 2026) Tj T* ET
+BT 1 0 0 1 36 707 Tm (Due date: Apr 15, 2026) Tj T* ET
+BT 1 0 0 1 36 694 Tm (Vendor tax ID: SYN-TAX-702877) Tj T* ET
+BT 1 0 0 1 36 681 Tm (Currency: CAD) Tj T* ET
+.2 .254902 .333333 rg
+BT /F1 8 Tf 9.6 TL ET
+BT 1 0 0 1 40 677 Tm (Invoice date: Mar 16, 2026) Tj T* ET
+BT 1 0 0 1 40 664 Tm (Due date: Apr 15, 2026) Tj T* ET
+BT 1 0 0 1 40 651 Tm (Vendor tax ID: SYN-TAX-702877) Tj T* ET
+BT 1 0 0 1 40 638 Tm (Currency: CAD) Tj T* ET
+.094118 .231373 .337255 rg
+BT /F2 7 Tf 8.4 TL ET
+BT 1 0 0 1 40 607 Tm (Description) Tj T* ET
+BT 1 0 0 1 375.331 607 Tm (Qty) Tj T* ET
+BT 1 0 0 1 413.392 607 Tm (Unit) Tj T* ET
+BT 1 0 0 1 490.277 607 Tm (Total) Tj T* ET
+n 40 602 m 572 602 l S
+BT /F1 7 Tf 8.4 TL ET
+.058824 .090196 .164706 rg
+BT 1 0 0 1 40 587 Tm (Data Migration Engagement 021-1) Tj T* ET
+BT 1 0 0 1 373.378 587 Tm (2.00) Tj T* ET
+BT 1 0 0 1 401.702 587 Tm ($415.00) Tj T* ET
+BT 1 0 0 1 481.702 587 Tm ($827.93) Tj T* ET
+.058824 .090196 .164706 rg
+BT 1 0 0 1 40 569 Tm (Workflow Automation Engagement 021-2) Tj T* ET
+BT 1 0 0 1 373.378 569 Tm (1.00) Tj T* ET
+BT 1 0 0 1 401.702 569 Tm ($265.00) Tj T* ET
+BT 1 0 0 1 481.702 569 Tm ($264.34) Tj T* ET
+.058824 .090196 .164706 rg
+BT 1 0 0 1 40 551 Tm (Platform Configuration Engagement 021-3) Tj T* ET
+BT 1 0 0 1 373.378 551 Tm (1.00) Tj T* ET
+BT 1 0 0 1 401.702 551 Tm ($646.00) Tj T* ET
+BT 1 0 0 1 481.702 551 Tm ($644.39) Tj T* ET
+.2 .254902 .333333 rg
+BT /F1 8 Tf 9.6 TL ET
+BT 1 0 0 1 472.648 511 Tm (Subtotal) Tj T* ET
+BT 1 0 0 1 536.416 511 Tm ($1,741.00) Tj T* ET
+BT 1 0 0 1 470.88 496 Tm (Discount) Tj T* ET
+BT 1 0 0 1 547.536 496 Tm ($87.05) Tj T* ET
+BT 1 0 0 1 488.664 481 Tm (Tax) Tj T* ET
+BT 1 0 0 1 547.536 481 Tm ($82.71) Tj T* ET
+BT 1 0 0 1 470.872 466 Tm (Shipping) Tj T* ET
+BT 1 0 0 1 547.536 466 Tm ($35.00) Tj T* ET
+.094118 .231373 .337255 rg
+BT /F2 11 Tf 13.2 TL ET
+BT 1 0 0 1 465.337 449 Tm (TOTAL) Tj T* ET
+BT 1 0 0 1 523.072 449 Tm ($1,771.66) Tj T* ET
+.392157 .454902 .545098 rg
+BT /F1 7 Tf 8.4 TL ET
+BT 1 0 0 1 40 28 Tm (Synthetic invoice for offline evaluation) Tj T* ET
+ 
+endstream
+endobj
+xref
+0 9
+0000000000 65535 f 
+0000000061 00000 n 
+0000000102 00000 n 
+0000000209 00000 n 
+0000000321 00000 n 
+0000000514 00000 n 
+0000000582 00000 n 
+0000000926 00000 n 
+0000000985 00000 n 
+trailer
+<<
+/ID 
+[<0d0009957f0e65fcf794ae9e1dc0babb><0d0009957f0e65fcf794ae9e1dc0babb>]
+% ReportLab generated PDF document -- digest (opensource)
+
+/Info 6 0 R
+/Root 5 0 R
+/Size 9
+>>
+startxref
+3403
+%%EOF

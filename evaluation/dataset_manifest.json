@@ -1,0 +1,52 @@
+{
+  "adversarial_documents": 5,
+  "currency_cases": {
+    "ambiguous_symbol": 8,
+    "explicit": 52
+  },
+  "dataset_version": "invoice-eval-v1",
+  "development_documents": 40,
+  "difficulty_distribution": {
+    "easy": 20,
+    "hard": 15,
+    "medium": 25
+  },
+  "generator_version": "1.0.0",
+  "holdout_documents": 20,
+  "line_item_groups": {
+    "1": 14,
+    "2-3": 20,
+    "4-5": 16,
+    "6-10": 10
+  },
+  "missing_field_distribution": {
+    "discount_total": 36,
+    "due_date": 20,
+    "purchase_order_number": 24,
+    "shipping_total": 42,
+    "vendor_tax_id": 18
+  },
+  "multi_page_documents": 8,
+  "schema_version": "invoice-schema-v1",
+  "seed": 42,
+  "split_difficulty_distribution": {
+    "development": {
+      "easy": 15,
+      "hard": 8,
+      "medium": 17
+    },
+    "holdout": {
+      "easy": 5,
+      "hard": 7,
+      "medium": 8
+    }
+  },
+  "templates": {
+    "template_a": 12,
+    "template_b": 12,
+    "template_c": 12,
+    "template_d": 12,
+    "template_e": 12
+  },
+  "total_documents": 60
+}

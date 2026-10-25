@@ -1,0 +1,16 @@
+INVOICE
+Vendor: Northstar Analytics
+Address: 100 Synthetic Business Park
+Invoice Number: Q4-2026-8837
+Invoice Date: 04 Apr 2026
+Vendor Tax ID: SYN-TAX-706713
+Currency: EUR
+
+Description | Quantity | Unit Price | Discount | Tax | Line Total
+Data Analytics Consulting Engagement 049-1 | 1.00 | €948.00 | €47.40 | €90.06 | €990.66
+
+Subtotal: €948.00
+Discount: €47.40
+Tax: €90.06
+Total: €990.66
+Thank you for your business.

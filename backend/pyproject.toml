@@ -27,6 +27,9 @@ dev = [
   "pytest-cov==6.2.1",
   "ruff==0.14.2",
 ]
+evaluation = [
+  "reportlab==4.4.10",
+]
 
 [tool.setuptools.packages.find]
 where = ["."]

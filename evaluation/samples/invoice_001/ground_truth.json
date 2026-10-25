@@ -1,0 +1,25 @@
+{
+  "currency": "CAD",
+  "discount_total": null,
+  "due_date": "2026-02-18",
+  "invoice_date": "2026-01-04",
+  "invoice_number": "AC-8213",
+  "line_items": [
+    {
+      "description": "Data Analytics Consulting Engagement 001-1",
+      "discount": null,
+      "line_total": "2092.20",
+      "quantity": "3.00",
+      "tax": "190.20",
+      "unit_price": "634.00"
+    }
+  ],
+  "purchase_order_number": null,
+  "shipping_total": "35.00",
+  "subtotal": "1902.00",
+  "tax_total": "190.20",
+  "total_amount": "2127.20",
+  "vendor_name": "Cedar Ridge Technology",
+  "vendor_tax_id": "SYN-TAX-700137",
+  "warnings": []
+}

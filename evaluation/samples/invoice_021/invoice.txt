@@ -1,0 +1,20 @@
+INVOICE
+Vendor: Cedar Ridge Technology
+Address: 100 Synthetic Business Park
+Invoice Number: AC-8473
+Invoice Date: Mar 16, 2026
+Vendor Tax ID: SYN-TAX-702877
+Due Date: Apr 15, 2026
+Currency: CAD
+
+Description | Quantity | Unit Price | Discount | Tax | Line Total
+Data Migration Engagement 021-1 | 2.00 | $415.00 | $41.50 | $39.43 | $827.93
+Workflow Automation Engagement 021-2 | 1.00 | $265.00 | $13.25 | $12.59 | $264.34
+Platform Configuration Engagement 021-3 | 1.00 | $646.00 | $32.30 | $30.69 | $644.39
+
+Subtotal: $1,741.00
+Discount: $87.05
+Tax: $82.71
+Shipping: $35.00
+Total: $1,771.66
+Thank you for your business.

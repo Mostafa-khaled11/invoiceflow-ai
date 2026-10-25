@@ -1,0 +1,33 @@
+{
+  "currency": "CAD",
+  "discount_total": "140.15",
+  "due_date": "2026-06-06",
+  "invoice_date": "2026-04-22",
+  "invoice_number": "AC-8603",
+  "line_items": [
+    {
+      "description": "Infrastructure Monitoring Engagement 031-1",
+      "discount": "131.70",
+      "line_total": "2752.53",
+      "quantity": "3.00",
+      "tax": "250.23",
+      "unit_price": "878.00"
+    },
+    {
+      "description": "Technical Support Engagement 031-2",
+      "discount": "8.45",
+      "line_total": "176.61",
+      "quantity": "1.00",
+      "tax": "16.06",
+      "unit_price": "169.00"
+    }
+  ],
+  "purchase_order_number": null,
+  "shipping_total": "35.00",
+  "subtotal": "2803.00",
+  "tax_total": "266.29",
+  "total_amount": "2964.14",
+  "vendor_name": "Harbor Point Analytics",
+  "vendor_tax_id": "SYN-TAX-704247",
+  "warnings": []
+}
