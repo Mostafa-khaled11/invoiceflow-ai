@@ -11,7 +11,8 @@ from typing import Any, Sequence
 from pypdf import PdfReader
 
 from app.core.config import Settings
-from app.prompts.invoice_extraction_v1 import PROMPT_VERSION
+from app.prompts.invoice_extraction_v1 import PROMPT_VERSION as DEFAULT_PROMPT_VERSION
+from app.prompts.invoice_prompt_registry import get_invoice_prompt_builder
 from app.schemas.structured_extractions import (
     StructuredInvoiceData,
     validate_structured_invoice_semantics,
@@ -31,6 +32,16 @@ EVALUATOR_VERSION = "1.0.0"
 
 class EvaluationConfigurationError(ValueError):
     pass
+
+
+def resolve_prompt_version(prompt_version: str = DEFAULT_PROMPT_VERSION) -> str:
+    """Validate a prompt version through the shared prompt registry."""
+
+    try:
+        get_invoice_prompt_builder(prompt_version)
+    except ValueError as exc:
+        raise EvaluationConfigurationError(str(exc)) from exc
+    return prompt_version
 
 
 def select_documents(
@@ -121,10 +132,12 @@ def dry_run(
     limit: int | None = None,
     invoice_id: str | None = None,
     invoice_ids: Sequence[str] | None = None,
+    prompt_version: str = DEFAULT_PROMPT_VERSION,
     allow_holdout: bool = False,
     cache_dir: Path | None = None,
     settings: Settings | None = None,
 ) -> dict[str, Any]:
+    prompt_version = resolve_prompt_version(prompt_version)
     selected = select_documents(
         dataset_dir,
         split=split,
@@ -142,8 +155,8 @@ def dry_run(
         text = _safe_input(path, mode)
         total_chars += len(text)
         if cache.load(
-            cache_key(text, provider, model, PROMPT_VERSION, SCHEMA_VERSION),
-            _identity(text, provider, model, PROMPT_VERSION, SCHEMA_VERSION),
+            cache_key(text, provider, model, prompt_version, SCHEMA_VERSION),
+            _identity(text, provider, model, prompt_version, SCHEMA_VERSION),
         ):
             cached += 1
         else:
@@ -158,7 +171,7 @@ def dry_run(
         "total_input_characters": total_chars,
         "provider": provider,
         "model": model,
-        "prompt_version": PROMPT_VERSION,
+        "prompt_version": prompt_version,
         "schema_version": SCHEMA_VERSION,
         "dry_run": True,
     }
@@ -172,6 +185,7 @@ def evaluate(
     limit: int | None = None,
     invoice_id: str | None = None,
     invoice_ids: Sequence[str] | None = None,
+    prompt_version: str = DEFAULT_PROMPT_VERSION,
     allow_holdout: bool = False,
     cache_enabled: bool = True,
     output_dir: Path | None = None,
@@ -179,6 +193,7 @@ def evaluate(
     cache_dir: Path | None = None,
     settings: Settings | None = None,
 ) -> tuple[Path, dict[str, Any]]:
+    prompt_version = resolve_prompt_version(prompt_version)
     selected = select_documents(
         dataset_dir,
         split=split,
@@ -203,6 +218,7 @@ def evaluate(
             "ground_truth": truth,
             "provider": provider.provider_name,
             "model": provider.model_name,
+            "prompt_version": prompt_version,
             "prediction_status": "failed",
             "cache_hit": False,
             "provider_called": False,
@@ -235,14 +251,14 @@ def evaluate(
             text,
             provider.provider_name,
             provider.model_name,
-            PROMPT_VERSION,
+            prompt_version,
             SCHEMA_VERSION,
         )
         key = cache_key(
             text,
             provider.provider_name,
             provider.model_name,
-            PROMPT_VERSION,
+            prompt_version,
             SCHEMA_VERSION,
         )
         response: dict[str, Any] | None = (
@@ -361,7 +377,7 @@ def evaluate(
         "selected_document_count": len(selected),
         "provider": provider.provider_name,
         "model": provider.model_name,
-        "prompt_version": PROMPT_VERSION,
+        "prompt_version": prompt_version,
         "structured_schema_version": SCHEMA_VERSION,
         "cache_enabled": cache_enabled,
         "selected_invoice_ids": [p.name for p in selected],

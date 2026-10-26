@@ -43,11 +43,15 @@ python -m evaluation.run_benchmark --split development --mode llm-only --limit 5
 python -m evaluation.run_benchmark --split development --mode llm-only --limit 5
 python -m evaluation.run_benchmark --split holdout --mode end-to-end --limit 5 --allow-holdout
 python -m evaluation.run_benchmark --split development --mode llm-only --invoice-id invoice_016 --invoice-id invoice_026 --invoice-id invoice_033 --dry-run
+python -m evaluation.run_benchmark --split development --mode llm-only --prompt-version invoice-extraction-v2 --limit 5 --dry-run
 ```
 
 `--invoice-id` may be repeated. Explicit IDs are evaluated in the order supplied
 and are mutually exclusive with `--limit`. Duplicate IDs and unknown IDs fail
 before any provider call. A single `--invoice-id` retains the original behavior.
+`--prompt-version` defaults to `invoice-extraction-v1`; supported values come
+from the shared prompt registry and are included in cache identity and run
+metadata.
 
 The second command is the explicit real-provider smoke benchmark and requires
 `GROQ_API_KEY`. `--no-cache` forces calls and consumes quota. Cache entries are

@@ -6,6 +6,8 @@ import argparse
 import json
 from pathlib import Path
 
+from app.prompts.invoice_extraction_v1 import PROMPT_VERSION as DEFAULT_PROMPT_VERSION
+from app.prompts.invoice_prompt_registry import PROMPT_BUILDERS
 from evaluation.runner import EvaluationConfigurationError, dry_run, evaluate
 
 
@@ -16,6 +18,11 @@ def main() -> None:
     )
     parser.add_argument(
         "--mode", choices=("llm-only", "end-to-end"), default="llm-only"
+    )
+    parser.add_argument(
+        "--prompt-version",
+        choices=tuple(sorted(PROMPT_BUILDERS)),
+        default=DEFAULT_PROMPT_VERSION,
     )
     selection = parser.add_mutually_exclusive_group()
     selection.add_argument("--limit", type=int)
@@ -43,6 +50,7 @@ def main() -> None:
                 mode=args.mode,
                 limit=args.limit,
                 invoice_ids=args.invoice_ids,
+                prompt_version=args.prompt_version,
                 allow_holdout=args.allow_holdout,
             )
             print(json.dumps(result, indent=2, sort_keys=True))
@@ -53,6 +61,7 @@ def main() -> None:
                 mode=args.mode,
                 limit=args.limit,
                 invoice_ids=args.invoice_ids,
+                prompt_version=args.prompt_version,
                 allow_holdout=args.allow_holdout,
                 cache_enabled=not args.no_cache,
                 output_dir=args.output_dir,

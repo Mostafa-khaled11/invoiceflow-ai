@@ -15,6 +15,7 @@ from evaluation.runner import (
     EvaluationConfigurationError,
     dry_run,
     evaluate,
+    resolve_prompt_version,
     select_documents,
 )
 
@@ -136,6 +137,58 @@ def test_dry_run_supports_multiple_invoice_ids_without_provider_calls(
     assert result["selected_documents"] == 3
     assert result["provider_calls_required"] == 3
     assert result["dry_run"] is True
+
+
+def test_prompt_version_defaults_to_v1(tmp_path: Path) -> None:
+    assert resolve_prompt_version() == "invoice-extraction-v1"
+    result = dry_run(DATASET, limit=1, cache_dir=tmp_path / "cache")
+    assert result["prompt_version"] == "invoice-extraction-v1"
+
+
+def test_explicit_v2_prompt_version_is_recorded_in_dry_run(tmp_path: Path) -> None:
+    result = dry_run(
+        DATASET,
+        limit=1,
+        prompt_version="invoice-extraction-v2",
+        cache_dir=tmp_path / "cache",
+    )
+    assert result["prompt_version"] == "invoice-extraction-v2"
+    assert result["provider_calls_required"] == 1
+
+
+def test_selected_prompt_version_is_persisted_in_run_and_predictions(
+    tmp_path: Path,
+) -> None:
+    result_dir, _ = evaluate(
+        DATASET,
+        limit=1,
+        prompt_version="invoice-extraction-v2",
+        provider=GroundTruthProvider(),
+        output_dir=tmp_path / "results",
+        cache_dir=tmp_path / "cache",
+    )
+    config = json.loads((result_dir / "run_config.json").read_text(encoding="utf-8"))
+    prediction = json.loads(
+        (result_dir / "predictions.jsonl").read_text(encoding="utf-8").splitlines()[0]
+    )
+    metrics = json.loads((result_dir / "metrics.json").read_text(encoding="utf-8"))
+    assert config["prompt_version"] == "invoice-extraction-v2"
+    assert prediction["prompt_version"] == "invoice-extraction-v2"
+    assert metrics["run_config"]["prompt_version"] == "invoice-extraction-v2"
+
+
+def test_unknown_prompt_version_is_rejected_before_provider_use() -> None:
+    with pytest.raises(
+        EvaluationConfigurationError, match="unsupported invoice prompt"
+    ):
+        dry_run(DATASET, limit=1, prompt_version="invoice-extraction-v99")
+
+
+def test_v1_and_v2_cache_keys_are_isolated() -> None:
+    text = "invoice text"
+    v1_key = cache_key(text, "groq", "model", "invoice-extraction-v1", "schema")
+    v2_key = cache_key(text, "groq", "model", "invoice-extraction-v2", "schema")
+    assert v1_key != v2_key
 
 
 def test_evaluation_writes_results_and_cache_prevents_duplicate_calls(
