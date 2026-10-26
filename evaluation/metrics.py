@@ -119,12 +119,21 @@ def evaluate_records(records: list[dict[str, Any]]) -> dict[str, Any]:
         "total_documents": len(records),
         "successful_predictions": len(successful),
         "failed_predictions": len(records) - len(successful),
-        "provider_success_rate": sum(
-            r.get("provider_call_success", False) for r in records
-        )
-        / len(records)
-        if records
-        else None,
+        "prediction_success_rate": len(successful) / len(records) if records else None,
+        "provider_call_count": sum(bool(r.get("provider_called")) for r in records),
+        "provider_call_success_count": sum(
+            bool(r.get("provider_called")) and bool(r.get("provider_call_success"))
+            for r in records
+        ),
+        "provider_success_rate": (
+            sum(
+                bool(r.get("provider_called")) and bool(r.get("provider_call_success"))
+                for r in records
+            )
+            / sum(bool(r.get("provider_called")) for r in records)
+            if sum(bool(r.get("provider_called")) for r in records)
+            else None
+        ),
         "schema_validity_rate": sum(r.get("schema_valid", False) for r in records)
         / len(records)
         if records
@@ -139,8 +148,25 @@ def evaluate_records(records: list[dict[str, Any]]) -> dict[str, Any]:
         "cache_hit_rate": sum(bool(r.get("cache_hit")) for r in records) / len(records)
         if records
         else None,
-        "retry_count": sum(max(0, int(r.get("attempt_count", 1)) - 1) for r in records),
+        "retries_performed_this_run": sum(
+            int(r.get("retries_performed_this_run", 0)) for r in records
+        ),
+        "cached_historical_retry_count": sum(
+            max(0, int(r.get("attempt_count", 1)) - 1)
+            for r in records
+            if r.get("cache_hit")
+        ),
+        "retry_count": sum(
+            int(r.get("retries_performed_this_run", 0)) for r in records
+        ),
         "provider_calls": sum(bool(r.get("provider_called")) for r in records),
+        "formatting_schema_failure_count": sum(
+            any(
+                error.get("error_type") in {"schema_error", "invalid_format"}
+                for error in record.get("errors", [])
+            )
+            for record in records
+        ),
     }
     performance = {
         "latency_p50_ms": percentile(latencies, 50),

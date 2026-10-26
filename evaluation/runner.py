@@ -172,6 +172,7 @@ def evaluate(
             "cache_hit": False,
             "provider_called": False,
             "provider_call_success": False,
+            "retries_performed_this_run": 0,
             "schema_valid": False,
             "semantic_valid": False,
             "errors": [],
@@ -233,6 +234,8 @@ def evaluate(
                 if cache_enabled:
                     cache.save(key, identity, response)
             except InvoiceLLMProviderError as exc:
+                record["attempt_count"] = exc.attempt_count
+                record["retries_performed_this_run"] = max(exc.attempt_count - 1, 0)
                 record["errors"] = [
                     _error(
                         path.name,
@@ -245,6 +248,7 @@ def evaluate(
                     )
                 ]
             except Exception as exc:
+                record["attempt_count"] = 1
                 record["errors"] = [
                     _error(
                         path.name,
@@ -268,6 +272,10 @@ def evaluate(
                     )
                 }
             )
+            if not record["cache_hit"]:
+                record["retries_performed_this_run"] = max(
+                    int(response.get("attempt_count") or 1) - 1, 0
+                )
             record["prediction"] = response["data"]
             try:
                 validated = StructuredInvoiceData.model_validate(response["data"])

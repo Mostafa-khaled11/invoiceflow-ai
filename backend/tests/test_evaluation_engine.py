@@ -10,6 +10,7 @@ import pytest
 from app.services.invoice_llm import InvoiceLLMProviderError, InvoiceLLMResponse
 from evaluation.cache import PredictionCache, cache_key
 from evaluation.comparators import compare_field
+from evaluation.metrics import HEADER_FIELDS, evaluate_records
 from evaluation.runner import (
     EvaluationConfigurationError,
     dry_run,
@@ -139,3 +140,54 @@ def test_provider_failure_is_recorded_without_crashing(tmp_path: Path) -> None:
     assert metrics["reliability"]["failed_predictions"] == 2
     errors = json.loads((result_dir / "errors.json").read_text(encoding="utf-8"))
     assert all(error["error_type"] == "provider_error" for error in errors)
+
+
+def test_reliability_denominators_separate_cache_calls_and_schema_failures() -> None:
+    correct_fields = {
+        field: {
+            "correct": True,
+            "error_type": None,
+            "expected": "value",
+            "predicted": "value",
+        }
+        for field in HEADER_FIELDS
+    }
+    cached_successes = [
+        {
+            "prediction_status": "success",
+            "cache_hit": True,
+            "provider_called": False,
+            "provider_call_success": False,
+            "schema_valid": True,
+            "semantic_valid": True,
+            "attempt_count": 3,
+            "retries_performed_this_run": 0,
+            "field_results": correct_fields,
+            "errors": [],
+        }
+        for _ in range(4)
+    ]
+    provider_success = {
+        "prediction_status": "failed",
+        "cache_hit": False,
+        "provider_called": True,
+        "provider_call_success": True,
+        "schema_valid": False,
+        "semantic_valid": False,
+        "attempt_count": 2,
+        "retries_performed_this_run": 1,
+        "field_results": {},
+        "errors": [{"error_type": "schema_error"}],
+    }
+
+    reliability = evaluate_records(cached_successes + [provider_success])["reliability"]
+
+    assert reliability["provider_call_count"] == 1
+    assert reliability["provider_call_success_count"] == 1
+    assert reliability["provider_success_rate"] == 1.0
+    assert reliability["prediction_success_rate"] == 0.8
+    assert reliability["schema_validity_rate"] == 0.8
+    assert reliability["semantic_validation_success_rate"] == 0.8
+    assert reliability["formatting_schema_failure_count"] == 1
+    assert reliability["retries_performed_this_run"] == 1
+    assert reliability["cached_historical_retry_count"] == 8
