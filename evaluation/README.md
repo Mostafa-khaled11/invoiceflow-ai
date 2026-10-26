@@ -42,7 +42,12 @@ never selected implicitly. Dry-run makes zero provider calls:
 python -m evaluation.run_benchmark --split development --mode llm-only --limit 5 --dry-run
 python -m evaluation.run_benchmark --split development --mode llm-only --limit 5
 python -m evaluation.run_benchmark --split holdout --mode end-to-end --limit 5 --allow-holdout
+python -m evaluation.run_benchmark --split development --mode llm-only --invoice-id invoice_016 --invoice-id invoice_026 --invoice-id invoice_033 --dry-run
 ```
+
+`--invoice-id` may be repeated. Explicit IDs are evaluated in the order supplied
+and are mutually exclusive with `--limit`. Duplicate IDs and unknown IDs fail
+before any provider call. A single `--invoice-id` retains the original behavior.
 
 The second command is the explicit real-provider smoke benchmark and requires
 `GROQ_API_KEY`. `--no-cache` forces calls and consumes quota. Cache entries are

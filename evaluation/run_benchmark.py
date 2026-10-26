@@ -17,8 +17,14 @@ def main() -> None:
     parser.add_argument(
         "--mode", choices=("llm-only", "end-to-end"), default="llm-only"
     )
-    parser.add_argument("--limit", type=int)
-    parser.add_argument("--invoice-id")
+    selection = parser.add_mutually_exclusive_group()
+    selection.add_argument("--limit", type=int)
+    selection.add_argument(
+        "--invoice-id",
+        action="append",
+        dest="invoice_ids",
+        help="select one or more invoice IDs; repeat the option, preserving order",
+    )
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--no-cache", action="store_true")
     parser.add_argument(
@@ -36,7 +42,7 @@ def main() -> None:
                 split=args.split,
                 mode=args.mode,
                 limit=args.limit,
-                invoice_id=args.invoice_id,
+                invoice_ids=args.invoice_ids,
                 allow_holdout=args.allow_holdout,
             )
             print(json.dumps(result, indent=2, sort_keys=True))
@@ -46,7 +52,7 @@ def main() -> None:
                 split=args.split,
                 mode=args.mode,
                 limit=args.limit,
-                invoice_id=args.invoice_id,
+                invoice_ids=args.invoice_ids,
                 allow_holdout=args.allow_holdout,
                 cache_enabled=not args.no_cache,
                 output_dir=args.output_dir,

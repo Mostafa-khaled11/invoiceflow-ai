@@ -6,7 +6,7 @@ import json
 from hashlib import sha256
 from pathlib import Path
 from time import perf_counter
-from typing import Any
+from typing import Any, Sequence
 
 from pypdf import PdfReader
 
@@ -39,6 +39,7 @@ def select_documents(
     limit: int | None = None,
     invoice_id: str | None = None,
     allow_holdout: bool = False,
+    invoice_ids: Sequence[str] | None = None,
 ) -> list[Path]:
     if split not in {"development", "holdout"}:
         raise EvaluationConfigurationError("split must be development or holdout")
@@ -50,12 +51,30 @@ def select_documents(
     if not root.is_dir():
         raise EvaluationConfigurationError(f"dataset split not found: {root}")
     paths = sorted((p for p in root.iterdir() if p.is_dir()), key=lambda p: p.name)
-    if invoice_id:
-        paths = [p for p in paths if p.name == invoice_id]
-        if not paths:
+    requested_ids = list(invoice_ids or ())
+    if invoice_id is not None:
+        if requested_ids:
             raise EvaluationConfigurationError(
-                f"invoice not found in {split}: {invoice_id}"
+                "use either invoice_id or invoice_ids, not both"
             )
+        requested_ids = [invoice_id]
+    if requested_ids and limit is not None:
+        raise EvaluationConfigurationError(
+            "--limit and --invoice-id are mutually exclusive"
+        )
+    if len(requested_ids) != len(set(requested_ids)):
+        raise EvaluationConfigurationError("duplicate invoice IDs are not allowed")
+    if requested_ids:
+        by_id = {path.name: path for path in paths}
+        unknown = [
+            invoice_id for invoice_id in requested_ids if invoice_id not in by_id
+        ]
+        if unknown:
+            raise EvaluationConfigurationError(
+                f"invoice ID(s) not found in {split}: {', '.join(unknown)}"
+            )
+        # Preserve explicit user order; the dataset itself remains stable-sorted.
+        return [by_id[invoice_id] for invoice_id in requested_ids]
     if limit is not None:
         if limit < 1:
             raise EvaluationConfigurationError("limit must be positive")
@@ -101,11 +120,19 @@ def dry_run(
     mode: str = "llm-only",
     limit: int | None = None,
     invoice_id: str | None = None,
+    invoice_ids: Sequence[str] | None = None,
     allow_holdout: bool = False,
     cache_dir: Path | None = None,
     settings: Settings | None = None,
 ) -> dict[str, Any]:
-    selected = select_documents(dataset_dir, split, limit, invoice_id, allow_holdout)
+    selected = select_documents(
+        dataset_dir,
+        split=split,
+        limit=limit,
+        invoice_id=invoice_id,
+        invoice_ids=invoice_ids,
+        allow_holdout=allow_holdout,
+    )
     settings = settings or Settings()
     provider = settings.llm_provider
     model = settings.groq_model
@@ -144,6 +171,7 @@ def evaluate(
     mode: str = "llm-only",
     limit: int | None = None,
     invoice_id: str | None = None,
+    invoice_ids: Sequence[str] | None = None,
     allow_holdout: bool = False,
     cache_enabled: bool = True,
     output_dir: Path | None = None,
@@ -151,7 +179,14 @@ def evaluate(
     cache_dir: Path | None = None,
     settings: Settings | None = None,
 ) -> tuple[Path, dict[str, Any]]:
-    selected = select_documents(dataset_dir, split, limit, invoice_id, allow_holdout)
+    selected = select_documents(
+        dataset_dir,
+        split=split,
+        limit=limit,
+        invoice_id=invoice_id,
+        invoice_ids=invoice_ids,
+        allow_holdout=allow_holdout,
+    )
     settings = settings or Settings()
     provider = provider or GroqInvoiceLLMProvider(settings)
     cache = PredictionCache(cache_dir or dataset_dir / "cache")

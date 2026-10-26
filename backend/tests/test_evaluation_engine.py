@@ -96,6 +96,48 @@ def test_selection_dry_run_and_holdout_guard(tmp_path: Path) -> None:
     )
 
 
+def test_single_explicit_invoice_id_selection() -> None:
+    selected = select_documents(DATASET, invoice_id="invoice_016")
+    assert [path.name for path in selected] == ["invoice_016"]
+
+
+def test_multiple_invoice_ids_preserve_user_order() -> None:
+    selected = select_documents(
+        DATASET,
+        invoice_ids=["invoice_026", "invoice_016", "invoice_033"],
+    )
+    assert [path.name for path in selected] == [
+        "invoice_026",
+        "invoice_016",
+        "invoice_033",
+    ]
+
+
+def test_unknown_and_duplicate_invoice_ids_are_rejected_before_evaluation() -> None:
+    with pytest.raises(EvaluationConfigurationError, match="not found"):
+        select_documents(DATASET, invoice_ids=["invoice_016", "invoice_999"])
+    with pytest.raises(EvaluationConfigurationError, match="duplicate"):
+        select_documents(DATASET, invoice_ids=["invoice_016", "invoice_016"])
+
+
+def test_explicit_invoice_ids_cannot_be_combined_with_limit() -> None:
+    with pytest.raises(EvaluationConfigurationError, match="mutually exclusive"):
+        select_documents(DATASET, limit=2, invoice_ids=["invoice_016"])
+
+
+def test_dry_run_supports_multiple_invoice_ids_without_provider_calls(
+    tmp_path: Path,
+) -> None:
+    result = dry_run(
+        DATASET,
+        invoice_ids=["invoice_016", "invoice_026", "invoice_033"],
+        cache_dir=tmp_path / "cache",
+    )
+    assert result["selected_documents"] == 3
+    assert result["provider_calls_required"] == 3
+    assert result["dry_run"] is True
+
+
 def test_evaluation_writes_results_and_cache_prevents_duplicate_calls(
     tmp_path: Path,
 ) -> None:
