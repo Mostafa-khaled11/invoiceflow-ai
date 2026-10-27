@@ -30,6 +30,7 @@ storage/
 evaluation/generated/
 evaluation/cache/
 evaluation/results/
+evaluation/diagnostics/
 
 # IDE and OS
 .idea/
