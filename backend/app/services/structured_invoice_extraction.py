@@ -1,5 +1,6 @@
 """Business orchestration for provider-backed structured invoice extraction."""
 
+import logging
 from time import perf_counter
 from typing import Any
 from uuid import UUID
@@ -28,10 +29,14 @@ from app.services.invoice_llm import (
     InvoiceLLMProvider,
     InvoiceLLMProviderError,
 )
+from app.services.structured_extraction_guardrails import (
+    apply_structured_extraction_guardrails,
+)
 
 SCHEMA_VERSION = "invoice-schema-v1"
 ERROR_INPUT_TOO_LARGE = "llm_input_too_large"
 ERROR_SEMANTIC_VALIDATION = "semantic_validation_failed"
+logger = logging.getLogger(__name__)
 
 
 class StructuredExtractionServiceError(RuntimeError):
@@ -127,7 +132,20 @@ class StructuredInvoiceExtractionService:
                 text,
                 schema=StructuredInvoiceData.model_json_schema(),
             )
-            data = StructuredInvoiceData.model_validate(provider_response.data)
+            guardrail_result = apply_structured_extraction_guardrails(
+                provider_response.data, text
+            )
+            if guardrail_result.normalized_fields or guardrail_result.fallback_fields:
+                logger.info(
+                    "structured_extraction_guardrails_applied",
+                    extra={
+                        "normalized_field_count": len(
+                            guardrail_result.normalized_fields
+                        ),
+                        "fallback_field_count": len(guardrail_result.fallback_fields),
+                    },
+                )
+            data = StructuredInvoiceData.model_validate(guardrail_result.data)
             validate_structured_invoice_semantics(data)
         except InvoiceLLMProviderError as exc:
             latency_ms = _elapsed_ms(started)
