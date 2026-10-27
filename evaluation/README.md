@@ -56,7 +56,10 @@ metadata.
 The second command is the explicit real-provider smoke benchmark and requires
 `GROQ_API_KEY`. `--no-cache` forces calls and consumes quota. Cache entries are
 inspectable JSON under `evaluation/cache/`, keyed by input SHA-256, provider,
-model, prompt version, and schema version. Corrupt entries are safe misses.
+model, prompt version, and schema version. They store raw provider responses;
+the shared production guardrails run after every cache read, so cached responses
+receive current deterministic canonicalization and labeled-date fallback.
+Corrupt entries are safe misses.
 
 Each run writes `run_config.json`, `predictions.jsonl`, `errors.json`,
 `metrics.json`, and `report.md` under `evaluation/results/`. Metrics include

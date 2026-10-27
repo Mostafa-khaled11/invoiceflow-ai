@@ -22,6 +22,9 @@ from app.services.invoice_llm import (
     InvoiceLLMProviderError,
     GroqInvoiceLLMProvider,
 )
+from app.services.structured_extraction_guardrails import (
+    apply_structured_extraction_guardrails,
+)
 from evaluation import SCHEMA_VERSION
 from evaluation.cache import PredictionCache, cache_key
 from evaluation.metrics import HEADER_FIELDS, evaluate_records
@@ -327,9 +330,19 @@ def evaluate(
                 record["retries_performed_this_run"] = max(
                     int(response.get("attempt_count") or 1) - 1, 0
                 )
-            record["prediction"] = response["data"]
+            record["raw_provider_prediction"] = response["data"]
+            guardrail_result = apply_structured_extraction_guardrails(
+                response["data"], text
+            )
+            record["final_guardrailed_prediction"] = guardrail_result.data
+            # Keep `prediction` as the compatible, final value used by metrics.
+            record["prediction"] = guardrail_result.data
+            record["guardrail_metadata"] = {
+                "normalized_fields": list(guardrail_result.normalized_fields),
+                "fallback_fields": list(guardrail_result.fallback_fields),
+            }
             try:
-                validated = StructuredInvoiceData.model_validate(response["data"])
+                validated = StructuredInvoiceData.model_validate(guardrail_result.data)
                 record["schema_valid"] = True
                 validate_structured_invoice_semantics(validated)
                 record["semantic_valid"] = True
@@ -343,7 +356,7 @@ def evaluate(
                         if not record["schema_valid"]
                         else "semantic_validation_error",
                         truth,
-                        response["data"],
+                        guardrail_result.data,
                         metadata,
                         type(exc).__name__,
                     )

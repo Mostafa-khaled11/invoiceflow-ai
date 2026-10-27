@@ -3,11 +3,16 @@
 from __future__ import annotations
 
 import json
+from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
 import pytest
+from app.schemas.structured_extractions import StructuredInvoiceData
 from app.services.invoice_llm import InvoiceLLMProviderError, InvoiceLLMResponse
+from app.services.structured_extraction_guardrails import (
+    apply_structured_extraction_guardrails,
+)
 from evaluation.cache import PredictionCache, cache_key
 from evaluation.comparators import compare_field
 from evaluation.metrics import HEADER_FIELDS, evaluate_records
@@ -81,6 +86,46 @@ class GroundTruthProvider:
             output_tokens=5,
             attempt_count=1,
         )
+
+
+class StaticProvider:
+    provider_name = "fake"
+    model_name = "fake-model"
+
+    def __init__(self, data: dict[str, Any], *, fail: bool = False) -> None:
+        self.data = data
+        self.fail = fail
+        self.calls = 0
+
+    def extract(
+        self, document_text: str, *, schema: dict[str, Any]
+    ) -> InvoiceLLMResponse:
+        self.calls += 1
+        if self.fail:
+            raise InvoiceLLMProviderError(
+                "provider_unavailable", attempt_count=1, retryable=False
+            )
+        return InvoiceLLMResponse(
+            data=deepcopy(self.data),
+            raw_model_output=deepcopy(self.data),
+            input_tokens=10,
+            output_tokens=5,
+            attempt_count=1,
+        )
+
+
+def _benchmark_truth(invoice_id: str) -> dict[str, Any]:
+    return json.loads(
+        (
+            DATASET / "generated" / "development" / invoice_id / "ground_truth.json"
+        ).read_text(encoding="utf-8")
+    )
+
+
+def _prediction_record(result_dir: Path) -> dict[str, Any]:
+    return json.loads(
+        (result_dir / "predictions.jsonl").read_text(encoding="utf-8").splitlines()[0]
+    )
 
 
 def test_selection_dry_run_and_holdout_guard(tmp_path: Path) -> None:
@@ -235,6 +280,138 @@ def test_provider_failure_is_recorded_without_crashing(tmp_path: Path) -> None:
     assert metrics["reliability"]["failed_predictions"] == 2
     errors = json.loads((result_dir / "errors.json").read_text(encoding="utf-8"))
     assert all(error["error_type"] == "provider_error" for error in errors)
+
+
+def test_evaluator_applies_guardrails_to_invoice_011_like_cached_raw_response(
+    tmp_path: Path,
+) -> None:
+    raw = _benchmark_truth("invoice_011")
+    raw.update(
+        {
+            "subtotal": "$658.00",
+            "tax_total": "$98.70",
+            "shipping_total": "$35.00",
+            "total_amount": "$791.70",
+        }
+    )
+    raw["line_items"][0].update(
+        {
+            "unit_price": "$329.00",
+            "tax": "$98.70",
+            "line_total": "$756.70",
+        }
+    )
+    cache_dir = tmp_path / "cache"
+    result_dir, metrics = evaluate(
+        DATASET,
+        invoice_id="invoice_011",
+        provider=StaticProvider(raw),
+        output_dir=tmp_path / "results",
+        cache_dir=cache_dir,
+    )
+    record = _prediction_record(result_dir)
+    assert record["prediction_status"] == "success"
+    assert record["raw_provider_prediction"]["subtotal"] == "$658.00"
+    assert record["final_guardrailed_prediction"]["subtotal"] == "658.00"
+    assert record["prediction"]["shipping_total"] == "35.00"
+    assert record["prediction"]["line_items"][0]["unit_price"] == "329.00"
+    assert "schema_error" not in [error["error_type"] for error in record["errors"]]
+    assert metrics["field_metrics"]["subtotal"]["correct"] == 1
+
+    cached_result_dir, cached_metrics = evaluate(
+        DATASET,
+        invoice_id="invoice_011",
+        provider=StaticProvider(raw, fail=True),
+        output_dir=tmp_path / "cached-results",
+        cache_dir=cache_dir,
+    )
+    cached_record = _prediction_record(cached_result_dir)
+    assert cached_record["cache_hit"] is True
+    assert cached_record["final_guardrailed_prediction"]["total_amount"] == "791.70"
+    assert cached_metrics["reliability"]["successful_predictions"] == 1
+
+
+def test_evaluator_recovers_invoice_012_like_labeled_dates(tmp_path: Path) -> None:
+    raw = _benchmark_truth("invoice_012")
+    raw["invoice_date"] = None
+    raw["due_date"] = None
+    result_dir, _ = evaluate(
+        DATASET,
+        invoice_id="invoice_012",
+        provider=StaticProvider(raw),
+        output_dir=tmp_path / "results",
+        cache_dir=tmp_path / "cache",
+    )
+    record = _prediction_record(result_dir)
+    assert record["raw_provider_prediction"]["invoice_date"] is None
+    assert record["final_guardrailed_prediction"]["invoice_date"] == "2026-03-14"
+    assert record["final_guardrailed_prediction"]["due_date"] == "2026-04-13"
+    assert record["guardrail_metadata"]["fallback_fields"] == [
+        "invoice_date",
+        "due_date",
+    ]
+
+
+def test_evaluator_leaves_ambiguous_slash_date_unresolved(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    raw = _benchmark_truth("invoice_001")
+    raw["invoice_date"] = None
+    monkeypatch.setattr(
+        "evaluation.runner._safe_input",
+        lambda path, mode: "Invoice Date: 07/02/2026",
+    )
+    result_dir, _ = evaluate(
+        DATASET,
+        invoice_id="invoice_001",
+        provider=StaticProvider(raw),
+        output_dir=tmp_path / "results",
+        cache_dir=tmp_path / "cache",
+    )
+    assert _prediction_record(result_dir)["prediction"]["invoice_date"] is None
+
+
+def test_evaluator_never_overwrites_existing_non_null_model_date(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    raw = _benchmark_truth("invoice_001")
+    raw["invoice_date"] = "2026-01-01"
+    monkeypatch.setattr(
+        "evaluation.runner._safe_input",
+        lambda path, mode: "Invoice Date: 14/03/2026",
+    )
+    result_dir, _ = evaluate(
+        DATASET,
+        invoice_id="invoice_001",
+        provider=StaticProvider(raw),
+        output_dir=tmp_path / "results",
+        cache_dir=tmp_path / "cache",
+    )
+    assert _prediction_record(result_dir)["prediction"]["invoice_date"] == "2026-01-01"
+
+
+def test_evaluator_and_production_guardrails_share_final_schema_output(
+    tmp_path: Path,
+) -> None:
+    raw = _benchmark_truth("invoice_012")
+    raw.update({"invoice_date": None, "due_date": None, "subtotal": "$1,834.00"})
+    source_text = (
+        DATASET / "generated" / "development" / "invoice_012" / "invoice.txt"
+    ).read_text(encoding="utf-8")
+    expected = StructuredInvoiceData.model_validate(
+        apply_structured_extraction_guardrails(raw, source_text).data
+    )
+    result_dir, _ = evaluate(
+        DATASET,
+        invoice_id="invoice_012",
+        provider=StaticProvider(raw),
+        output_dir=tmp_path / "results",
+        cache_dir=tmp_path / "cache",
+    )
+    actual = StructuredInvoiceData.model_validate(
+        _prediction_record(result_dir)["final_guardrailed_prediction"]
+    )
+    assert actual == expected
 
 
 def test_reliability_denominators_separate_cache_calls_and_schema_failures() -> None:
