@@ -61,7 +61,14 @@ def _render_modern(
     canvas.setFont("Helvetica", 10)
     canvas.setFillColor(colors.HexColor("#334155"))
     canvas.drawString(44, height - 76, data["vendor"])
-    _draw_metadata(canvas, data, width - 260, height - 48, align="right")
+    _draw_metadata(
+        canvas,
+        data,
+        width - 260,
+        height - 48,
+        align="right",
+        include_invoice_number=True,
+    )
     _render_body(
         canvas,
         data,
@@ -81,7 +88,9 @@ def _render_compact(
     canvas.setFont("Helvetica-Bold", 15)
     canvas.drawString(36, height - 42, data["vendor"])
     canvas.setFont("Helvetica", 8)
-    canvas.drawRightString(width - 36, height - 42, f"Invoice {data['invoice_number']}")
+    canvas.drawRightString(
+        width - 36, height - 42, f"Invoice Number: {data['invoice_number']}"
+    )
     canvas.line(36, height - 52, width - 36, height - 52)
     _draw_metadata(canvas, data, 36, height - 72, compact=True)
     _render_body(
@@ -109,6 +118,7 @@ def _render_table_heavy(
         compact=False,
         accent=colors.HexColor("#111827"),
         heavy=True,
+        include_invoice_number=True,
     )
 
 
@@ -129,7 +139,9 @@ def _render_unseen(
     canvas.drawString(150, height - 65, "Invoice")
     canvas.setFont("Helvetica", 10)
     canvas.drawString(150, height - 84, data["vendor"])
-    _draw_metadata(canvas, data, 150, height - 120, compact=False)
+    _draw_metadata(
+        canvas, data, 150, height - 120, compact=False, include_invoice_number=True
+    )
     _render_body(
         canvas,
         data,
@@ -158,7 +170,9 @@ def _header(
     canvas.drawString(40, height - 48, title)
     canvas.setFont("Helvetica", 10)
     canvas.drawString(40, height - 67, data["vendor"])
-    canvas.drawRightString(width - 40, height - 48, data["invoice_number"])
+    canvas.drawRightString(
+        width - 40, height - 48, f"Invoice Number: {data['invoice_number']}"
+    )
     canvas.drawRightString(width - 40, height - 67, "Synthetic business document")
 
 
@@ -174,9 +188,17 @@ def _render_body(
     left: float = 40,
     accent: colors.Color = colors.HexColor("#183B56"),
     heavy: bool = False,
+    include_invoice_number: bool = False,
 ) -> None:
     right = width - 40
-    _draw_metadata(canvas, data, left, top, compact=compact)
+    _draw_metadata(
+        canvas,
+        data,
+        left,
+        top,
+        compact=compact,
+        include_invoice_number=include_invoice_number,
+    )
     y = top - (70 if compact else 90)
     items = data["line_items"]
     per_page = max(1, len(items) // page_count + (1 if len(items) % page_count else 0))
@@ -217,10 +239,14 @@ def _draw_metadata(
     *,
     align: str = "left",
     compact: bool = False,
+    include_invoice_number: bool = False,
 ) -> None:
     canvas.setFillColor(colors.HexColor("#334155"))
     canvas.setFont("Helvetica", 8 if compact else 9)
-    rows = [("Invoice date", data["invoice_date"])]
+    rows = []
+    if include_invoice_number:
+        rows.append(("Invoice Number", data["invoice_number"]))
+    rows.append(("Invoice date", data["invoice_date"]))
     if data["due_date"]:
         rows.append(("Due date", data["due_date"]))
     if data["purchase_order"]:
@@ -252,33 +278,59 @@ def _draw_table(
     canvas.setFillColor(accent)
     canvas.setFont("Helvetica-Bold", 7 if compact else 8)
     canvas.drawString(left, y, "Description")
-    canvas.drawRightString(right - 185, y, "Qty")
-    canvas.drawRightString(right - 145, y, "Unit")
-    canvas.drawRightString(right - 65, y, "Total")
+    canvas.drawRightString(right - 285, y, "Qty")
+    canvas.drawRightString(right - 230, y, "Unit")
+    canvas.drawRightString(right - 155, y, "Discount")
+    canvas.drawRightString(right - 80, y, "Tax")
+    canvas.drawRightString(right, y, "Total")
     canvas.line(left, y - 5, right, y - 5)
     y -= 20
     canvas.setFont("Helvetica", 7 if compact else 8)
     for item in items:
         description = str(item["description"])
-        if (
-            stringWidth(description, "Helvetica", 7 if compact else 8)
-            > right - left - 210
-        ):
-            description = description[: max(12, int((right - left - 220) / 4))] + "…"
+        font_size = 7 if compact else 8
+        description_lines = _wrap_text(
+            description, "Helvetica", font_size, right - 285 - left - 24
+        )
         canvas.setFillColor(colors.HexColor("#0F172A"))
-        canvas.drawString(left, y, description)
-        canvas.drawRightString(right - 185, y, str(item["quantity"]))
+        for line_index, line in enumerate(description_lines):
+            canvas.drawString(left, y - line_index * 9, line)
+        canvas.drawRightString(right - 285, y, str(item["quantity"]))
         canvas.drawRightString(
-            right - 145, y, _display_money(item["unit_price"], data["symbol"])
+            right - 230, y, _display_money(item["unit_price"], data["symbol"])
         )
         canvas.drawRightString(
-            right - 65, y, _display_money(item["line_total"], data["symbol"])
+            right - 155, y, _display_money(item["discount"], data["symbol"])
+        )
+        canvas.drawRightString(
+            right - 80, y, _display_money(item["tax"], data["symbol"])
+        )
+        canvas.drawRightString(
+            right, y, _display_money(item["line_total"], data["symbol"])
         )
         if heavy:
             canvas.setStrokeColor(colors.HexColor("#CBD5E1"))
-            canvas.line(left, y - 5, right, y - 5)
-        y -= 18 if compact else 22
+            row_bottom = y - (len(description_lines) - 1) * 9 - 5
+            canvas.line(left, row_bottom, right, row_bottom)
+        y -= (18 if compact else 22) + (len(description_lines) - 1) * 9
     return y
+
+
+def _wrap_text(text: str, font: str, size: int, max_width: float) -> list[str]:
+    """Wrap a description without dropping text from the PDF text layer."""
+
+    lines: list[str] = []
+    current = ""
+    for word in text.split():
+        candidate = f"{current} {word}".strip()
+        if current and stringWidth(candidate, font, size) > max_width:
+            lines.append(current)
+            current = word
+        else:
+            current = candidate
+    if current:
+        lines.append(current)
+    return lines or [""]
 
 
 def _draw_totals(

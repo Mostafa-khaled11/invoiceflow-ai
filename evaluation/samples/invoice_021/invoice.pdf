@@ -43,7 +43,7 @@ endobj
 endobj
 8 0 obj
 <<
-/Length 2367
+/Length 2726
 >>
 stream
 1 0 0 1 0 0 cm  BT /F1 12 Tf 14.4 TL ET
@@ -51,7 +51,7 @@ stream
 BT /F2 15 Tf 18 TL ET
 BT 1 0 0 1 36 750 Tm (Cedar Ridge Technology) Tj T* ET
 BT /F1 8 Tf 9.6 TL ET
-BT 1 0 0 1 516.864 750 Tm (Invoice AC-8473) Tj T* ET
+BT 1 0 0 1 483.968 750 Tm (Invoice Number: AC-8473) Tj T* ET
 n 36 740 m 576 740 l S
 .2 .254902 .333333 rg
 BT /F1 8 Tf 9.6 TL ET
@@ -68,26 +68,34 @@ BT 1 0 0 1 40 638 Tm (Currency: CAD) Tj T* ET
 .094118 .231373 .337255 rg
 BT /F2 7 Tf 8.4 TL ET
 BT 1 0 0 1 40 607 Tm (Description) Tj T* ET
-BT 1 0 0 1 375.331 607 Tm (Qty) Tj T* ET
-BT 1 0 0 1 413.392 607 Tm (Unit) Tj T* ET
-BT 1 0 0 1 490.277 607 Tm (Total) Tj T* ET
+BT 1 0 0 1 275.331 607 Tm (Qty) Tj T* ET
+BT 1 0 0 1 328.392 607 Tm (Unit) Tj T* ET
+BT 1 0 0 1 387.054 607 Tm (Discount) Tj T* ET
+BT 1 0 0 1 479.939 607 Tm (Tax) Tj T* ET
+BT 1 0 0 1 555.277 607 Tm (Total) Tj T* ET
 n 40 602 m 572 602 l S
 BT /F1 7 Tf 8.4 TL ET
 .058824 .090196 .164706 rg
 BT 1 0 0 1 40 587 Tm (Data Migration Engagement 021-1) Tj T* ET
-BT 1 0 0 1 373.378 587 Tm (2.00) Tj T* ET
-BT 1 0 0 1 401.702 587 Tm ($415.00) Tj T* ET
-BT 1 0 0 1 481.702 587 Tm ($827.93) Tj T* ET
+BT 1 0 0 1 273.378 587 Tm (2.00) Tj T* ET
+BT 1 0 0 1 316.702 587 Tm ($415.00) Tj T* ET
+BT 1 0 0 1 395.594 587 Tm ($41.50) Tj T* ET
+BT 1 0 0 1 470.594 587 Tm ($39.43) Tj T* ET
+BT 1 0 0 1 546.702 587 Tm ($827.93) Tj T* ET
 .058824 .090196 .164706 rg
 BT 1 0 0 1 40 569 Tm (Workflow Automation Engagement 021-2) Tj T* ET
-BT 1 0 0 1 373.378 569 Tm (1.00) Tj T* ET
-BT 1 0 0 1 401.702 569 Tm ($265.00) Tj T* ET
-BT 1 0 0 1 481.702 569 Tm ($264.34) Tj T* ET
+BT 1 0 0 1 273.378 569 Tm (1.00) Tj T* ET
+BT 1 0 0 1 316.702 569 Tm ($265.00) Tj T* ET
+BT 1 0 0 1 395.594 569 Tm ($13.25) Tj T* ET
+BT 1 0 0 1 470.594 569 Tm ($12.59) Tj T* ET
+BT 1 0 0 1 546.702 569 Tm ($264.34) Tj T* ET
 .058824 .090196 .164706 rg
 BT 1 0 0 1 40 551 Tm (Platform Configuration Engagement 021-3) Tj T* ET
-BT 1 0 0 1 373.378 551 Tm (1.00) Tj T* ET
-BT 1 0 0 1 401.702 551 Tm ($646.00) Tj T* ET
-BT 1 0 0 1 481.702 551 Tm ($644.39) Tj T* ET
+BT 1 0 0 1 273.378 551 Tm (1.00) Tj T* ET
+BT 1 0 0 1 316.702 551 Tm ($646.00) Tj T* ET
+BT 1 0 0 1 395.594 551 Tm ($32.30) Tj T* ET
+BT 1 0 0 1 470.594 551 Tm ($30.69) Tj T* ET
+BT 1 0 0 1 546.702 551 Tm ($644.39) Tj T* ET
 .2 .254902 .333333 rg
 BT /F1 8 Tf 9.6 TL ET
 BT 1 0 0 1 472.648 511 Tm (Subtotal) Tj T* ET
@@ -130,5 +138,5 @@ trailer
 /Size 9
 >>
 startxref
-3403
+3762
 %%EOF

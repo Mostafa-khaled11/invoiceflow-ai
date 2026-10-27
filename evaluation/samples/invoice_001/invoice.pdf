@@ -43,7 +43,7 @@ endobj
 endobj
 8 0 obj
 <<
-/Length 1691
+/Length 1877
 >>
 stream
 1 0 0 1 0 0 cm  BT /F1 12 Tf 14.4 TL ET
@@ -54,7 +54,7 @@ BT /F2 24 Tf 28.8 TL ET
 BT 1 0 0 1 40 744 Tm (INVOICE) Tj T* ET
 BT /F1 10 Tf 12 TL ET
 BT 1 0 0 1 40 725 Tm (Cedar Ridge Technology) Tj T* ET
-BT 1 0 0 1 532.54 744 Tm (AC-8213) Tj T* ET
+BT 1 0 0 1 456.96 744 Tm (Invoice Number: AC-8213) Tj T* ET
 BT 1 0 0 1 441.94 725 Tm (Synthetic business document) Tj T* ET
 .2 .254902 .333333 rg
 BT /F1 9 Tf 10.8 TL ET
@@ -65,16 +65,20 @@ BT 1 0 0 1 40 603 Tm (Currency: CAD) Tj T* ET
 .094118 .231373 .337255 rg
 BT /F2 8 Tf 9.6 TL ET
 BT 1 0 0 1 40 552 Tm (Description) Tj T* ET
-BT 1 0 0 1 373.664 552 Tm (Qty) Tj T* ET
-BT 1 0 0 1 411.448 552 Tm (Unit) Tj T* ET
-BT 1 0 0 1 487.888 552 Tm (Total) Tj T* ET
+BT 1 0 0 1 273.664 552 Tm (Qty) Tj T* ET
+BT 1 0 0 1 326.448 552 Tm (Unit) Tj T* ET
+BT 1 0 0 1 382.776 552 Tm (Discount) Tj T* ET
+BT 1 0 0 1 478.216 552 Tm (Tax) Tj T* ET
+BT 1 0 0 1 552.888 552 Tm (Total) Tj T* ET
 n 40 547 m 572 547 l S
 BT /F1 8 Tf 9.6 TL ET
 .058824 .090196 .164706 rg
 BT 1 0 0 1 40 532 Tm (Data Analytics Consulting Engagement 001-1) Tj T* ET
-BT 1 0 0 1 371.432 532 Tm (3.00) Tj T* ET
-BT 1 0 0 1 398.088 532 Tm ($634.00) Tj T* ET
-BT 1 0 0 1 471.416 532 Tm ($2,092.20) Tj T* ET
+BT 1 0 0 1 271.432 532 Tm (3.00) Tj T* ET
+BT 1 0 0 1 313.088 532 Tm ($634.00) Tj T* ET
+BT 1 0 0 1 409 532 Tm (\227) Tj T* ET
+BT 1 0 0 1 463.088 532 Tm ($190.20) Tj T* ET
+BT 1 0 0 1 536.416 532 Tm ($2,092.20) Tj T* ET
 .2 .254902 .333333 rg
 BT /F1 9 Tf 10.8 TL ET
 BT 1 0 0 1 468.979 488 Tm (Subtotal) Tj T* ET
@@ -115,5 +119,5 @@ trailer
 /Size 9
 >>
 startxref
-2727
+2913
 %%EOF

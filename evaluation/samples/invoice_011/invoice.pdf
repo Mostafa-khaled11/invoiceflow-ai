@@ -43,7 +43,7 @@ endobj
 endobj
 8 0 obj
 <<
-/Length 1901
+/Length 2131
 >>
 stream
 1 0 0 1 0 0 cm  BT /F1 12 Tf 14.4 TL ET
@@ -57,10 +57,11 @@ BT /F1 10 Tf 12 TL ET
 BT 1 0 0 1 44 716 Tm (Harbor Point Analytics) Tj T* ET
 .2 .254902 .333333 rg
 BT /F1 9 Tf 10.8 TL ET
-BT 1 0 0 1 245.431 744 Tm (Invoice date: Feb 10, 2026) Tj T* ET
-BT 1 0 0 1 249.454 731 Tm (Purchase order: PO-8187) Tj T* ET
-BT 1 0 0 1 219.943 718 Tm (Vendor tax ID: SYN-TAX-701507) Tj T* ET
-BT 1 0 0 1 291.493 705 Tm (Currency: CAD) Tj T* ET
+BT 1 0 0 1 248.464 744 Tm (Invoice Number: AC-8343) Tj T* ET
+BT 1 0 0 1 245.431 731 Tm (Invoice date: Feb 10, 2026) Tj T* ET
+BT 1 0 0 1 249.454 718 Tm (Purchase order: PO-8187) Tj T* ET
+BT 1 0 0 1 219.943 705 Tm (Vendor tax ID: SYN-TAX-701507) Tj T* ET
+BT 1 0 0 1 291.493 692 Tm (Currency: CAD) Tj T* ET
 .2 .254902 .333333 rg
 BT /F1 9 Tf 10.8 TL ET
 BT 1 0 0 1 40 647 Tm (Invoice date: Feb 10, 2026) Tj T* ET
@@ -70,16 +71,20 @@ BT 1 0 0 1 40 608 Tm (Currency: CAD) Tj T* ET
 .058824 .462745 .431373 rg
 BT /F2 8 Tf 9.6 TL ET
 BT 1 0 0 1 40 557 Tm (Description) Tj T* ET
-BT 1 0 0 1 373.664 557 Tm (Qty) Tj T* ET
-BT 1 0 0 1 411.448 557 Tm (Unit) Tj T* ET
-BT 1 0 0 1 487.888 557 Tm (Total) Tj T* ET
+BT 1 0 0 1 273.664 557 Tm (Qty) Tj T* ET
+BT 1 0 0 1 326.448 557 Tm (Unit) Tj T* ET
+BT 1 0 0 1 382.776 557 Tm (Discount) Tj T* ET
+BT 1 0 0 1 478.216 557 Tm (Tax) Tj T* ET
+BT 1 0 0 1 552.888 557 Tm (Total) Tj T* ET
 n 40 552 m 572 552 l S
 BT /F1 8 Tf 9.6 TL ET
 .058824 .090196 .164706 rg
 BT 1 0 0 1 40 537 Tm (Platform Configuration Engagement 011-1) Tj T* ET
-BT 1 0 0 1 371.432 537 Tm (2.00) Tj T* ET
-BT 1 0 0 1 398.088 537 Tm ($329.00) Tj T* ET
-BT 1 0 0 1 478.088 537 Tm ($756.70) Tj T* ET
+BT 1 0 0 1 271.432 537 Tm (2.00) Tj T* ET
+BT 1 0 0 1 313.088 537 Tm ($329.00) Tj T* ET
+BT 1 0 0 1 409 537 Tm (\227) Tj T* ET
+BT 1 0 0 1 467.536 537 Tm ($98.70) Tj T* ET
+BT 1 0 0 1 543.088 537 Tm ($756.70) Tj T* ET
 .2 .254902 .333333 rg
 BT /F1 9 Tf 10.8 TL ET
 BT 1 0 0 1 468.979 493 Tm (Subtotal) Tj T* ET
@@ -120,5 +125,5 @@ trailer
 /Size 9
 >>
 startxref
-2937
+3167
 %%EOF

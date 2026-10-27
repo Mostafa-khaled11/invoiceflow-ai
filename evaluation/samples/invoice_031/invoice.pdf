@@ -43,7 +43,7 @@ endobj
 endobj
 8 0 obj
 <<
-/Length 2017
+/Length 2337
 >>
 stream
 1 0 0 1 0 0 cm  BT /F1 12 Tf 14.4 TL ET
@@ -56,30 +56,37 @@ BT /F1 9 Tf 10.8 TL ET
 BT 1 0 0 1 488.972 750 Tm (Harbor Point Analytics) Tj T* ET
 .2 .254902 .333333 rg
 BT /F1 9 Tf 10.8 TL ET
-BT 1 0 0 1 40 684 Tm (Invoice date: Apr 22, 2026) Tj T* ET
-BT 1 0 0 1 40 671 Tm (Due date: Jun 06, 2026) Tj T* ET
-BT 1 0 0 1 40 658 Tm (Vendor tax ID: SYN-TAX-704247) Tj T* ET
-BT 1 0 0 1 40 645 Tm (Currency: CAD) Tj T* ET
+BT 1 0 0 1 40 684 Tm (Invoice Number: AC-8603) Tj T* ET
+BT 1 0 0 1 40 671 Tm (Invoice date: Apr 22, 2026) Tj T* ET
+BT 1 0 0 1 40 658 Tm (Due date: Jun 06, 2026) Tj T* ET
+BT 1 0 0 1 40 645 Tm (Vendor tax ID: SYN-TAX-704247) Tj T* ET
+BT 1 0 0 1 40 632 Tm (Currency: CAD) Tj T* ET
 .066667 .094118 .152941 rg
 BT /F2 8 Tf 9.6 TL ET
 BT 1 0 0 1 40 594 Tm (Description) Tj T* ET
-BT 1 0 0 1 373.664 594 Tm (Qty) Tj T* ET
-BT 1 0 0 1 411.448 594 Tm (Unit) Tj T* ET
-BT 1 0 0 1 487.888 594 Tm (Total) Tj T* ET
+BT 1 0 0 1 273.664 594 Tm (Qty) Tj T* ET
+BT 1 0 0 1 326.448 594 Tm (Unit) Tj T* ET
+BT 1 0 0 1 382.776 594 Tm (Discount) Tj T* ET
+BT 1 0 0 1 478.216 594 Tm (Tax) Tj T* ET
+BT 1 0 0 1 552.888 594 Tm (Total) Tj T* ET
 n 40 589 m 572 589 l S
 BT /F1 8 Tf 9.6 TL ET
 .058824 .090196 .164706 rg
 BT 1 0 0 1 40 574 Tm (Infrastructure Monitoring Engagement 031-1) Tj T* ET
-BT 1 0 0 1 371.432 574 Tm (3.00) Tj T* ET
-BT 1 0 0 1 398.088 574 Tm ($878.00) Tj T* ET
-BT 1 0 0 1 471.416 574 Tm ($2,752.53) Tj T* ET
+BT 1 0 0 1 271.432 574 Tm (3.00) Tj T* ET
+BT 1 0 0 1 313.088 574 Tm ($878.00) Tj T* ET
+BT 1 0 0 1 388.088 574 Tm ($131.70) Tj T* ET
+BT 1 0 0 1 463.088 574 Tm ($250.23) Tj T* ET
+BT 1 0 0 1 536.416 574 Tm ($2,752.53) Tj T* ET
 .796078 .835294 .882353 RG
 n 40 569 m 572 569 l S
 .058824 .090196 .164706 rg
 BT 1 0 0 1 40 552 Tm (Technical Support Engagement 031-2) Tj T* ET
-BT 1 0 0 1 371.432 552 Tm (1.00) Tj T* ET
-BT 1 0 0 1 398.088 552 Tm ($169.00) Tj T* ET
-BT 1 0 0 1 478.088 552 Tm ($176.61) Tj T* ET
+BT 1 0 0 1 271.432 552 Tm (1.00) Tj T* ET
+BT 1 0 0 1 313.088 552 Tm ($169.00) Tj T* ET
+BT 1 0 0 1 396.984 552 Tm ($8.45) Tj T* ET
+BT 1 0 0 1 467.536 552 Tm ($16.06) Tj T* ET
+BT 1 0 0 1 543.088 552 Tm ($176.61) Tj T* ET
 .796078 .835294 .882353 RG
 n 40 547 m 572 547 l S
 .2 .254902 .333333 rg
@@ -124,5 +131,5 @@ trailer
 /Size 9
 >>
 startxref
-3053
+3373
 %%EOF
