@@ -1,12 +1,14 @@
 """Deterministic initial workflow routing for current invoice validation."""
 
 from dataclasses import dataclass
+from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from app.models.invoice_validation import InvoiceValidation
 from app.models.invoice_workflow import (
     InvoiceWorkflow,
     ReviewCase,
@@ -39,15 +41,34 @@ class UnsupportedValidationDecisionError(ValueError):
 
 
 @dataclass(frozen=True)
+class WorkflowReviewCaseResult:
+    """Compact review-case summary exposed to API adapters."""
+
+    review_case_id: UUID
+    status: str
+    resolution: str | None
+
+
+@dataclass(frozen=True)
 class WorkflowRoutingResult:
-    """Internal result returned by one routing attempt."""
+    """Internal result returned by routing and current-workflow reads."""
 
     workflow_id: UUID
     validation_id: UUID
     state: str
     state_version: int
-    review_case_id: UUID | None
+    validation_decision: str
+    ruleset_version: str
+    review_case: WorkflowReviewCaseResult | None
+    created_at: datetime
+    updated_at: datetime
     created: bool
+
+    @property
+    def review_case_id(self) -> UUID | None:
+        """Compatibility accessor for callers that only need the identifier."""
+
+        return self.review_case.review_case_id if self.review_case else None
 
 
 def route_validation_decision(decision: str) -> WorkflowState:
@@ -85,6 +106,7 @@ def route_invoice_workflow(session: Session, invoice_id: UUID) -> WorkflowRoutin
     if locked_invoice is None:
         raise WorkflowRoutingError("invoice_not_found", "Invoice not found", 404)
 
+    validation: InvoiceValidation | None = None
     try:
         try:
             extraction = resolve_canonical_structured_extraction(session, invoice_id)
@@ -108,8 +130,8 @@ def route_invoice_workflow(session: Session, invoice_id: UUID) -> WorkflowRoutin
             )
         ).scalar_one_or_none()
         if existing is not None:
-            review_case_id = _review_case_id(session, existing.id)
-            result = _routing_result(existing, validation.id, review_case_id, False)
+            review_case = _review_case(session, existing.id)
+            result = _routing_result(existing, validation, review_case, False)
             session.commit()
             return result
 
@@ -135,19 +157,19 @@ def route_invoice_workflow(session: Session, invoice_id: UUID) -> WorkflowRoutin
             )
         )
 
-        review_case: ReviewCase | None = None
+        review_case_model: ReviewCase | None = None
         if validation.final_decision == FinalValidationDecision.REVIEW_REQUIRED.value:
-            review_case = ReviewCase(
+            review_case_model = ReviewCase(
                 workflow_id=workflow.id,
                 status=ReviewCaseStatus.OPEN.value,
             )
-            session.add(review_case)
+            session.add(review_case_model)
 
         session.commit()
         return _routing_result(
             workflow,
-            validation.id,
-            review_case.id if review_case is not None else None,
+            validation,
+            _review_case_from_model(review_case_model),
             True,
         )
     except (WorkflowRoutingError, UnsupportedValidationDecisionError):
@@ -156,6 +178,12 @@ def route_invoice_workflow(session: Session, invoice_id: UUID) -> WorkflowRoutin
     except IntegrityError as exc:
         session.rollback()
         if not _is_workflow_identity_race(exc):
+            raise WorkflowRoutingError(
+                "workflow_persistence_failed",
+                "The workflow could not be stored.",
+                500,
+            ) from exc
+        if validation is None:
             raise WorkflowRoutingError(
                 "workflow_persistence_failed",
                 "The workflow could not be stored.",
@@ -172,8 +200,8 @@ def route_invoice_workflow(session: Session, invoice_id: UUID) -> WorkflowRoutin
                 "The workflow could not be stored.",
                 500,
             ) from exc
-        review_case_id = _review_case_id(session, winner.id)
-        result = _routing_result(winner, validation.id, review_case_id, False)
+        review_case = _review_case(session, winner.id)
+        result = _routing_result(winner, validation, review_case, False)
         session.commit()
         return result
     except SQLAlchemyError as exc:
@@ -185,24 +213,94 @@ def route_invoice_workflow(session: Session, invoice_id: UUID) -> WorkflowRoutin
         ) from exc
 
 
-def _review_case_id(session: Session, workflow_id: UUID) -> UUID | None:
-    return session.execute(
-        select(ReviewCase.id).where(ReviewCase.workflow_id == workflow_id)
+def resolve_current_invoice_workflow(
+    session: Session, invoice_id: UUID
+) -> WorkflowRoutingResult:
+    """Read the workflow for the invoice's current validation context."""
+
+    try:
+        try:
+            extraction = resolve_canonical_structured_extraction(session, invoice_id)
+        except InvoiceValidationError as exc:
+            raise WorkflowRoutingError(
+                exc.error_code,
+                exc.message,
+                exc.status_code,
+            ) from exc
+        validation = find_validation_for_extraction(session, extraction.id)
+        if validation is None:
+            raise WorkflowRoutingError(
+                "current_validation_required",
+                "The current structured extraction has not been validated yet.",
+                409,
+            )
+        workflow = session.execute(
+            select(InvoiceWorkflow).where(
+                InvoiceWorkflow.validation_id == validation.id
+            )
+        ).scalar_one_or_none()
+        if workflow is None:
+            raise WorkflowRoutingError(
+                "workflow_not_found",
+                "The current validation has not been routed yet.",
+                404,
+            )
+        return _routing_result(
+            workflow,
+            validation,
+            _review_case(session, workflow.id),
+            False,
+        )
+    except WorkflowRoutingError:
+        session.rollback()
+        raise
+    except SQLAlchemyError as exc:
+        session.rollback()
+        raise WorkflowRoutingError(
+            "workflow_read_failed",
+            "The current workflow could not be read.",
+            500,
+        ) from exc
+
+
+def _review_case(
+    session: Session, workflow_id: UUID
+) -> WorkflowReviewCaseResult | None:
+    review_case = session.execute(
+        select(ReviewCase).where(ReviewCase.workflow_id == workflow_id)
     ).scalar_one_or_none()
+    return _review_case_from_model(review_case)
+
+
+def _review_case_from_model(
+    review_case: ReviewCase | None,
+) -> WorkflowReviewCaseResult | None:
+    if review_case is None:
+        return None
+    return WorkflowReviewCaseResult(
+        review_case_id=review_case.id,
+        status=review_case.status,
+        resolution=review_case.resolution,
+    )
 
 
 def _routing_result(
     workflow: InvoiceWorkflow,
-    validation_id: UUID,
-    review_case_id: UUID | None,
+    validation: InvoiceValidation,
+    review_case: WorkflowReviewCaseResult | None,
     created: bool,
 ) -> WorkflowRoutingResult:
+    validation_id = validation.id
     return WorkflowRoutingResult(
         workflow_id=workflow.id,
         validation_id=validation_id,
         state=workflow.state,
         state_version=workflow.state_version,
-        review_case_id=review_case_id,
+        validation_decision=validation.final_decision,
+        ruleset_version=validation.ruleset_version,
+        review_case=review_case,
+        created_at=workflow.created_at,
+        updated_at=workflow.updated_at,
         created=created,
     )
 

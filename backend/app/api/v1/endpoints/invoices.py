@@ -21,6 +21,11 @@ from app.models.invoice_text_extraction import (
     InvoiceTextExtractionStatus,
 )
 from app.models.invoice_validation import InvoiceValidation
+from app.models.invoice_workflow import (
+    ReviewCaseStatus,
+    ReviewResolution,
+    WorkflowState,
+)
 from app.schemas.invoices import (
     InvoiceDuplicateDetail,
     InvoiceResponse,
@@ -30,6 +35,16 @@ from app.schemas.structured_extractions import StructuredExtractionResponse
 from app.schemas.validations import (
     InvoiceValidationResponse,
     ValidationFindingResponse,
+)
+from app.schemas.workflows import (
+    InvoiceWorkflowResponse,
+    InvoiceWorkflowRouteResponse,
+    WorkflowReviewCaseResponse,
+)
+from app.services.business_validation import (
+    FinalValidationDecision,
+    ValidationRuleStatus,
+    ValidationSeverity,
 )
 from app.services.invoice_files import (
     UploadValidationError,
@@ -46,6 +61,12 @@ from app.services.invoice_validation import (
     InvoiceValidationError,
     find_invoice_validation,
     validate_and_persist_invoice,
+)
+from app.services.invoice_workflow import (
+    WorkflowRoutingError,
+    WorkflowRoutingResult,
+    resolve_current_invoice_workflow,
+    route_invoice_workflow,
 )
 from app.services.structured_invoice_extraction import (
     StructuredExtractionServiceError,
@@ -308,13 +329,57 @@ def get_invoice_validation(
     return _validation_response(run)
 
 
+@router.post(
+    "/{invoice_id}/workflow/route",
+    summary="Route the current validation into its initial workflow state",
+    response_model=InvoiceWorkflowRouteResponse,
+)
+def route_invoice_workflow_endpoint(
+    invoice_id: UUID,
+    session: Annotated[Session, Depends(get_db)],
+) -> InvoiceWorkflowRouteResponse:
+    """Create or retrieve the idempotent initial workflow for an invoice."""
+
+    try:
+        result = route_invoice_workflow(session, invoice_id)
+    except WorkflowRoutingError as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail={"code": exc.error_code, "message": exc.message},
+        ) from exc
+
+    return _workflow_route_response(result)
+
+
+@router.get(
+    "/{invoice_id}/workflow",
+    summary="Read the workflow for the current validation",
+    response_model=InvoiceWorkflowResponse,
+)
+def get_invoice_workflow(
+    invoice_id: UUID,
+    session: Annotated[Session, Depends(get_db)],
+) -> InvoiceWorkflowResponse:
+    """Return workflow state only when it belongs to the current validation."""
+
+    try:
+        result = resolve_current_invoice_workflow(session, invoice_id)
+    except WorkflowRoutingError as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail={"code": exc.error_code, "message": exc.message},
+        ) from exc
+
+    return _workflow_response(result)
+
+
 def _validation_response(run: InvoiceValidation) -> InvoiceValidationResponse:
     return InvoiceValidationResponse(
         validation_id=run.id,
         invoice_id=run.invoice_id,
         structured_extraction_id=run.structured_extraction_id,
         ruleset_version=run.ruleset_version,
-        final_decision=run.final_decision,
+        final_decision=FinalValidationDecision(run.final_decision),
         pass_count=run.pass_count,
         fail_count=run.fail_count,
         not_evaluable_count=run.not_evaluable_count,
@@ -323,8 +388,8 @@ def _validation_response(run: InvoiceValidation) -> InvoiceValidationResponse:
             ValidationFindingResponse(
                 rule_id=finding.rule_id,
                 rule_name=finding.rule_name,
-                status=finding.status,
-                severity=finding.severity,
+                status=ValidationRuleStatus(finding.status),
+                severity=ValidationSeverity(finding.severity),
                 message=finding.message,
                 actual_value=finding.actual_value,
                 expected_value=finding.expected_value,
@@ -334,4 +399,41 @@ def _validation_response(run: InvoiceValidation) -> InvoiceValidationResponse:
             )
             for finding in run.findings
         ],
+    )
+
+
+def _workflow_response(result: WorkflowRoutingResult) -> InvoiceWorkflowResponse:
+    review_case = result.review_case
+    return InvoiceWorkflowResponse(
+        workflow_id=result.workflow_id,
+        validation_id=result.validation_id,
+        state=WorkflowState(result.state),
+        state_version=result.state_version,
+        created_at=result.created_at,
+        updated_at=result.updated_at,
+        validation_decision=FinalValidationDecision(result.validation_decision),
+        ruleset_version=result.ruleset_version,
+        review_case=(
+            None
+            if review_case is None
+            else WorkflowReviewCaseResponse(
+                review_case_id=review_case.review_case_id,
+                status=ReviewCaseStatus(review_case.status),
+                resolution=(
+                    None
+                    if review_case.resolution is None
+                    else ReviewResolution(review_case.resolution)
+                ),
+            )
+        ),
+    )
+
+
+def _workflow_route_response(
+    result: WorkflowRoutingResult,
+) -> InvoiceWorkflowRouteResponse:
+    response = _workflow_response(result)
+    return InvoiceWorkflowRouteResponse(
+        **response.model_dump(),
+        created=result.created,
     )
