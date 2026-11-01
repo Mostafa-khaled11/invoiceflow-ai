@@ -176,7 +176,7 @@ def find_invoice_validation(session: Session, invoice_id: UUID) -> InvoiceValida
     """Return the persisted validation of the canonical extraction."""
 
     extraction = resolve_canonical_structured_extraction(session, invoice_id)
-    run = _find_validation(session, extraction.id, RULESET_VERSION)
+    run = find_validation_for_extraction(session, extraction.id)
     if run is None:
         raise InvoiceValidationError(
             ERROR_VALIDATION_NOT_FOUND,
@@ -184,6 +184,16 @@ def find_invoice_validation(session: Session, invoice_id: UUID) -> InvoiceValida
             404,
         )
     return run
+
+
+def find_validation_for_extraction(
+    session: Session,
+    structured_extraction_id: UUID,
+    ruleset_version: str = RULESET_VERSION,
+) -> InvoiceValidation | None:
+    """Return validation for one extraction under the active ruleset."""
+
+    return _find_validation(session, structured_extraction_id, ruleset_version)
 
 
 def _find_validation(
