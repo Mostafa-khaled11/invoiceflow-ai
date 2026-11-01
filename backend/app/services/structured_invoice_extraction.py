@@ -29,6 +29,7 @@ from app.services.invoice_llm import (
     InvoiceLLMProvider,
     InvoiceLLMProviderError,
 )
+from app.services.invoice_lock import lock_invoice_for_update
 from app.services.structured_extraction_guardrails import (
     apply_structured_extraction_guardrails,
 )
@@ -63,6 +64,15 @@ class StructuredInvoiceExtractionService:
         self._settings = settings
 
     def extract(self, invoice_id: UUID) -> StructuredExtractionResponse:
+        """Extract once, then persist under the shared invoice-row lock.
+
+        The request-scoped session starts an implicit read transaction when the
+        invoice/text/identity queries run. This service owns that transaction
+        for the current route, so it explicitly rolls it back before provider
+        work. The final transaction locks and rechecks the identity, preventing
+        a valid concurrent success from being overwritten.
+        """
+
         invoice = self._session.get(Invoice, invoice_id)
         if invoice is None:
             raise StructuredExtractionServiceError(
@@ -106,16 +116,17 @@ class StructuredInvoiceExtractionService:
             existing is not None
             and existing.status == StructuredExtractionStatus.SUCCESS
         ):
-            return _to_response(existing)
+            response = _to_response(existing)
+            self._session.rollback()
+            return response
 
         previous_attempts = existing.attempt_count if existing is not None else 0
         text = text_extraction.text_content
+        self._session.rollback()
         if len(text) > self._settings.max_llm_input_chars:
             self._persist_failure(
-                invoice,
-                text_extraction,
+                invoice_id,
                 identity,
-                existing=existing,
                 error_code=ERROR_INPUT_TOO_LARGE,
                 attempt_count=previous_attempts + 1,
                 latency_ms=0,
@@ -150,10 +161,8 @@ class StructuredInvoiceExtractionService:
         except InvoiceLLMProviderError as exc:
             latency_ms = _elapsed_ms(started)
             self._persist_failure(
-                invoice,
-                text_extraction,
+                invoice_id,
                 identity,
-                existing=existing,
                 error_code=exc.error_code,
                 attempt_count=previous_attempts + max(exc.attempt_count, 1),
                 latency_ms=latency_ms,
@@ -171,10 +180,8 @@ class StructuredInvoiceExtractionService:
                 else None
             )
             self._persist_failure(
-                invoice,
-                text_extraction,
+                invoice_id,
                 identity,
-                existing=existing,
                 error_code=ERROR_SEMANTIC_VALIDATION,
                 attempt_count=previous_attempts
                 + max(
@@ -189,21 +196,36 @@ class StructuredInvoiceExtractionService:
                 422,
             ) from exc
 
-        record = existing or InvoiceStructuredExtraction(**identity)
-        record.invoice_id = invoice.id
-        record.status = StructuredExtractionStatus.SUCCESS.value
-        record.structured_data = data.model_dump(mode="json")
-        record.raw_model_output = provider_response.raw_model_output
-        record.input_tokens = provider_response.input_tokens
-        record.output_tokens = provider_response.output_tokens
-        record.latency_ms = _elapsed_ms(started)
-        record.error_code = None
-        record.attempt_count = previous_attempts + max(
-            provider_response.attempt_count, 1
-        )
-        invoice.status = InvoiceStatus.STRUCTURED_EXTRACTED.value
-        self._session.add(record)
+        record = None
         try:
+            locked_invoice = lock_invoice_for_update(self._session, invoice_id)
+            if locked_invoice is None:
+                raise StructuredExtractionServiceError(
+                    "invoice_not_found", "Invoice not found", 404
+                )
+            concurrent = self._find_by_identity(identity)
+            if (
+                concurrent is not None
+                and concurrent.status == StructuredExtractionStatus.SUCCESS
+            ):
+                response = _to_response(concurrent)
+                self._session.commit()
+                return response
+
+            record = concurrent or InvoiceStructuredExtraction(**identity)
+            record.invoice_id = locked_invoice.id
+            record.status = StructuredExtractionStatus.SUCCESS.value
+            record.structured_data = data.model_dump(mode="json")
+            record.raw_model_output = provider_response.raw_model_output
+            record.input_tokens = provider_response.input_tokens
+            record.output_tokens = provider_response.output_tokens
+            record.latency_ms = _elapsed_ms(started)
+            record.error_code = None
+            record.attempt_count = (
+                concurrent.attempt_count if concurrent is not None else 0
+            ) + max(provider_response.attempt_count, 1)
+            locked_invoice.status = InvoiceStatus.STRUCTURED_EXTRACTED.value
+            self._session.add(record)
             self._session.commit()
         except SQLAlchemyError as exc:
             self._session.rollback()
@@ -218,6 +240,9 @@ class StructuredInvoiceExtractionService:
                 "The structured extraction could not be stored.",
                 500,
             ) from exc
+        except StructuredExtractionServiceError:
+            self._session.rollback()
+            raise
         return _to_response(record)
 
     def _find_by_identity(
@@ -229,30 +254,43 @@ class StructuredInvoiceExtractionService:
 
     def _persist_failure(
         self,
-        invoice: Invoice,
-        text_extraction: InvoiceTextExtraction,
+        invoice_id: UUID,
         identity: dict[str, Any],
         *,
-        existing: InvoiceStructuredExtraction | None,
         error_code: str,
         attempt_count: int,
         latency_ms: int,
         raw_model_output: dict[str, Any] | None = None,
     ) -> InvoiceStructuredExtraction:
-        record = existing or InvoiceStructuredExtraction(
-            invoice_id=invoice.id,
-            **identity,
-        )
-        record.status = StructuredExtractionStatus.FAILED.value
-        record.structured_data = None
-        record.raw_model_output = raw_model_output
-        record.input_tokens = None
-        record.output_tokens = None
-        record.latency_ms = latency_ms
-        record.error_code = error_code
-        record.attempt_count = attempt_count
-        self._session.add(record)
         try:
+            locked_invoice = lock_invoice_for_update(self._session, invoice_id)
+            if locked_invoice is None:
+                raise StructuredExtractionServiceError(
+                    "invoice_not_found", "Invoice not found", 404
+                )
+            existing = self._find_by_identity(identity)
+            if (
+                existing is not None
+                and existing.status == StructuredExtractionStatus.SUCCESS
+            ):
+                self._session.commit()
+                return existing
+            record = existing or InvoiceStructuredExtraction(
+                invoice_id=locked_invoice.id,
+                **identity,
+            )
+            record.status = StructuredExtractionStatus.FAILED.value
+            record.structured_data = None
+            record.raw_model_output = raw_model_output
+            record.input_tokens = None
+            record.output_tokens = None
+            record.latency_ms = latency_ms
+            record.error_code = error_code
+            record.attempt_count = max(
+                attempt_count,
+                (existing.attempt_count + 1) if existing is not None else 0,
+            )
+            self._session.add(record)
             self._session.commit()
         except SQLAlchemyError as exc:
             self._session.rollback()
@@ -261,6 +299,9 @@ class StructuredInvoiceExtractionService:
                 "The structured extraction failure could not be stored.",
                 500,
             ) from exc
+        except StructuredExtractionServiceError:
+            self._session.rollback()
+            raise
         return record
 
 
