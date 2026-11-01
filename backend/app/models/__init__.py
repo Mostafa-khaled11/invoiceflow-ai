@@ -9,6 +9,7 @@ from app.models.invoice_text_extraction import (
     InvoiceTextExtraction,
     InvoiceTextExtractionStatus,
 )
+from app.models.invoice_validation import InvoiceValidation, InvoiceValidationFinding
 
 __all__ = [
     "Invoice",
@@ -17,4 +18,6 @@ __all__ = [
     "StructuredExtractionStatus",
     "InvoiceTextExtraction",
     "InvoiceTextExtractionStatus",
+    "InvoiceValidation",
+    "InvoiceValidationFinding",
 ]

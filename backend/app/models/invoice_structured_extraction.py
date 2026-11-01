@@ -24,6 +24,7 @@ from app.db.base import Base
 if TYPE_CHECKING:
     from app.models.invoice import Invoice
     from app.models.invoice_text_extraction import InvoiceTextExtraction
+    from app.models.invoice_validation import InvoiceValidation
 
 
 class StructuredExtractionStatus(StrEnum):
@@ -90,4 +91,7 @@ class InvoiceStructuredExtraction(Base):
     invoice: Mapped["Invoice"] = relationship(back_populates="structured_extractions")
     text_extraction: Mapped["InvoiceTextExtraction"] = relationship(
         back_populates="structured_extractions"
+    )
+    validations: Mapped[list["InvoiceValidation"]] = relationship(
+        back_populates="structured_extraction"
     )

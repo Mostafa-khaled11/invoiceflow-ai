@@ -85,7 +85,13 @@ exponential backoff. Successful results are idempotent for the same text
 extraction, provider, model, prompt version, and schema version. Missing values
 remain `null`. The schema covers vendor identity, invoice number/dates, purchase
 order, currency, subtotal/discount/tax/shipping/total, line items, and a small
-controlled warning-code list. Business arithmetic validation is not implemented.
+controlled warning-code list.
+
+Successful structured extractions are then checked by the deterministic
+Business Validation Engine (ruleset `invoice-validation-v1`; see
+`docs/business-validation-v1.md`). Validation is triggered explicitly through
+the validate endpoint, reads only the persisted structured data, and stores its
+run and findings separately; it never changes the extracted values.
 
 ## Run locally with Docker
 
@@ -131,6 +137,12 @@ python -m ruff format --check backend
 pyright backend
 ```
 
+The backend test configuration intentionally uses `pythonpath = [".", ".."]`.
+The first entry resolves the backend `app` package; the second resolves the
+repository-level `evaluation` package and shared root test helpers when the
+backend suite is run from `backend/`. This keeps root and backend test commands
+reproducible without duplicating those packages.
+
 The default test suite uses a fake provider and does not call Groq. An optional
 synthetic live smoke test can be run once, only when explicitly enabled:
 
@@ -172,6 +184,48 @@ npm run build
 | GET | `/api/v1/invoices/{invoice_id}` | Returns stored invoice metadata; 404 when unknown |
 | POST | `/api/v1/invoices/{invoice_id}/extract-text` | Extracts and persists PDF digital-text metadata; does not return raw text |
 | POST | `/api/v1/invoices/{invoice_id}/extract-structured` | Extracts versioned structured invoice data through Groq; does not return raw text or prompts |
+| POST | `/api/v1/invoices/{invoice_id}/validate` | Runs the deterministic `invoice-validation-v1` ruleset against the latest successful structured extraction and persists run plus findings; idempotent (200); 404 unknown invoice, 409 without successful extraction |
+| GET | `/api/v1/invoices/{invoice_id}/validation` | Returns the persisted validation run with all findings for the canonical structured extraction; 404 when not validated, 409 without successful extraction |
+
+### Business validation
+
+`POST /api/v1/invoices/{invoice_id}/validate` requires a **successful
+structured extraction** for the invoice (the latest one by creation time is
+selected). If none exists, the API returns `409` with code
+`structured_extraction_required` — it never triggers PDF extraction, structured
+extraction, or Groq as a side effect of validation.
+
+Validation is **idempotent** per `structured_extraction_id + ruleset_version`:
+calling the endpoint again returns the already persisted run (same validation
+id, same findings) instead of creating duplicates. This is enforced by a unique
+database constraint, so concurrent requests cannot create two runs for the
+same extraction and ruleset.
+
+The GET endpoint first selects the latest successful structured extraction
+(`created_at DESC`, then extraction ID DESC) and returns only the validation for
+that exact extraction and current ruleset. If a newer successful extraction
+exists but has not been validated, it returns `404 validation_not_found`; it
+does not fall back to an older validation. Historical validation rows remain
+stored for audit purposes.
+
+The persisted decision (`final_decision`) is one of `PASS`, `WARNING`,
+`REVIEW_REQUIRED`, or `BLOCKED`. Decision semantics are preserved exactly as
+defined by the engine: **`WARNING` does not mean human review is required** —
+for example, summary-tax invoices legitimately produce a `WARNING` because tax
+consistency (`FIN004`) is not evaluable without line-item taxes. Only
+`REVIEW_REQUIRED` represents a result that needs human review, and `BLOCKED`
+remains reserved for the blocking conditions defined by the engine.
+
+Validation is deterministic, performs **no LLM/provider calls**, and never
+modifies the structured extraction it validates; every rule result is stored
+as a separate finding row (rule id/name, status `PASS`/`FAIL`/`NOT_EVALUABLE`,
+severity, message, actual/expected/difference values, affected fields, and
+rule metadata) and returned by both endpoints.
+
+Validation rows currently use cascading foreign keys from invoices and
+structured extractions. If invoice deletion is introduced in a later task,
+those cascades will also delete validation audit history and must be reviewed
+before adding that feature.
 
 Duplicate prevention is content-based: the SHA-256 digest of the uploaded
 PDF is unique at the database level, so uploading identical bytes again
@@ -209,8 +263,9 @@ The health response is:
 
 This release includes PDF upload intake with private storage, PostgreSQL
 persistence, SHA-256 duplicate prevention, deterministic pypdf text-layer
-extraction, and Groq-backed structured extraction with application format
-validation. It deliberately does not include OCR, business arithmetic
-validation, PDF download streaming, authentication, authorization, worker
-processing, approval actions, or n8n integration. Those features require later
-implementation tasks described in the project documents.
+extraction, Groq-backed structured extraction with application format
+validation, and deterministic business validation with persisted runs and
+findings (`invoice-validation-v1`). It deliberately does not include OCR, PDF
+download streaming, authentication, authorization, worker processing, a human
+review queue, approval actions, or n8n integration. Those features require
+later implementation tasks described in the project documents.

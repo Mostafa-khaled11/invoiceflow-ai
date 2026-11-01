@@ -25,6 +25,7 @@ from app.db.base import Base
 if TYPE_CHECKING:
     from app.models.invoice_structured_extraction import InvoiceStructuredExtraction
     from app.models.invoice_text_extraction import InvoiceTextExtraction
+    from app.models.invoice_validation import InvoiceValidation
 
 
 class InvoiceStatus(StrEnum):
@@ -79,6 +80,10 @@ class Invoice(Base):
         cascade="all, delete-orphan",
     )
     structured_extractions: Mapped[list["InvoiceStructuredExtraction"]] = relationship(
+        back_populates="invoice",
+        cascade="all, delete-orphan",
+    )
+    validations: Mapped[list["InvoiceValidation"]] = relationship(
         back_populates="invoice",
         cascade="all, delete-orphan",
     )

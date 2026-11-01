@@ -20,12 +20,17 @@ from app.models.invoice_text_extraction import (
     InvoiceTextExtraction,
     InvoiceTextExtractionStatus,
 )
+from app.models.invoice_validation import InvoiceValidation
 from app.schemas.invoices import (
     InvoiceDuplicateDetail,
     InvoiceResponse,
     InvoiceTextExtractionResponse,
 )
 from app.schemas.structured_extractions import StructuredExtractionResponse
+from app.schemas.validations import (
+    InvoiceValidationResponse,
+    ValidationFindingResponse,
+)
 from app.services.invoice_files import (
     UploadValidationError,
     validate_invoice_pdf,
@@ -37,6 +42,11 @@ from app.services.invoice_intake import (
 from app.services.invoice_llm import InvoiceLLMProvider
 from app.services.invoice_storage import InvoiceStorage, InvoiceStorageError
 from app.services.invoice_text_extraction import InvoiceTextExtractor
+from app.services.invoice_validation import (
+    InvoiceValidationError,
+    find_invoice_validation,
+    validate_and_persist_invoice,
+)
 from app.services.structured_invoice_extraction import (
     StructuredExtractionServiceError,
     StructuredInvoiceExtractionService,
@@ -247,3 +257,81 @@ def extract_invoice_structured(
             status_code=exc.status_code,
             detail={"code": exc.error_code, "message": exc.message},
         ) from exc
+
+
+@router.post(
+    "/{invoice_id}/validate",
+    summary="Validate the invoice against the deterministic business ruleset",
+    response_model=InvoiceValidationResponse,
+)
+def run_invoice_validation(
+    invoice_id: UUID,
+    session: Annotated[Session, Depends(get_db)],
+) -> InvoiceValidationResponse:
+    """Validate the canonical structured extraction and persist the report.
+
+    Deterministic and provider-free: reads the latest successful structured
+    extraction, returns the already persisted run for the same extraction
+    and ruleset version, or stores a new run with all findings atomically.
+    """
+
+    try:
+        run, _created = validate_and_persist_invoice(session, invoice_id)
+    except InvoiceValidationError as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail={"code": exc.error_code, "message": exc.message},
+        ) from exc
+
+    return _validation_response(run)
+
+
+@router.get(
+    "/{invoice_id}/validation",
+    summary="Read the persisted validation of the current structured extraction",
+    response_model=InvoiceValidationResponse,
+)
+def get_invoice_validation(
+    invoice_id: UUID,
+    session: Annotated[Session, Depends(get_db)],
+) -> InvoiceValidationResponse:
+    """Return the stored validation run including every finding."""
+
+    try:
+        run = find_invoice_validation(session, invoice_id)
+    except InvoiceValidationError as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail={"code": exc.error_code, "message": exc.message},
+        ) from exc
+
+    return _validation_response(run)
+
+
+def _validation_response(run: InvoiceValidation) -> InvoiceValidationResponse:
+    return InvoiceValidationResponse(
+        validation_id=run.id,
+        invoice_id=run.invoice_id,
+        structured_extraction_id=run.structured_extraction_id,
+        ruleset_version=run.ruleset_version,
+        final_decision=run.final_decision,
+        pass_count=run.pass_count,
+        fail_count=run.fail_count,
+        not_evaluable_count=run.not_evaluable_count,
+        created_at=run.created_at,
+        findings=[
+            ValidationFindingResponse(
+                rule_id=finding.rule_id,
+                rule_name=finding.rule_name,
+                status=finding.status,
+                severity=finding.severity,
+                message=finding.message,
+                actual_value=finding.actual_value,
+                expected_value=finding.expected_value,
+                difference=finding.difference,
+                affected_fields=finding.affected_fields,
+                metadata=finding.meta,
+            )
+            for finding in run.findings
+        ],
+    )
