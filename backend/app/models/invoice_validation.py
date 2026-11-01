@@ -25,6 +25,7 @@ from app.db.base import Base
 if TYPE_CHECKING:
     from app.models.invoice import Invoice
     from app.models.invoice_structured_extraction import InvoiceStructuredExtraction
+    from app.models.invoice_workflow import InvoiceWorkflow
 
 
 class InvoiceValidation(Base):
@@ -81,6 +82,11 @@ class InvoiceValidation(Base):
         back_populates="validation",
         cascade="all, delete-orphan",
         order_by="InvoiceValidationFinding.sequence_number",
+    )
+    workflow: Mapped["InvoiceWorkflow | None"] = relationship(
+        back_populates="validation",
+        uselist=False,
+        passive_deletes=True,
     )
 
 

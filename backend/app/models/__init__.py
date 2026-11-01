@@ -10,6 +10,15 @@ from app.models.invoice_text_extraction import (
     InvoiceTextExtractionStatus,
 )
 from app.models.invoice_validation import InvoiceValidation, InvoiceValidationFinding
+from app.models.invoice_workflow import (
+    InvoiceWorkflow,
+    ReviewCase,
+    ReviewCaseStatus,
+    ReviewResolution,
+    WorkflowEvent,
+    WorkflowEventType,
+    WorkflowState,
+)
 
 __all__ = [
     "Invoice",
@@ -20,4 +29,11 @@ __all__ = [
     "InvoiceTextExtractionStatus",
     "InvoiceValidation",
     "InvoiceValidationFinding",
+    "InvoiceWorkflow",
+    "WorkflowEvent",
+    "WorkflowEventType",
+    "WorkflowState",
+    "ReviewCase",
+    "ReviewCaseStatus",
+    "ReviewResolution",
 ]
