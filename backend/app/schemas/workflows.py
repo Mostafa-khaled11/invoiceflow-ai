@@ -19,6 +19,16 @@ class WorkflowReviewCaseResponse(BaseModel):
     review_case_id: UUID
     status: ReviewCaseStatus
     resolution: ReviewResolution | None
+    resolved_at: datetime | None = None
+    resolution_request_id: str | None = None
+
+
+class InvoiceReviewResolutionRequest(BaseModel):
+    """Human-review command payload."""
+
+    decision: ReviewResolution
+    resolution_request_id: UUID
+    note: str | None = None
 
 
 class InvoiceWorkflowResponse(BaseModel):

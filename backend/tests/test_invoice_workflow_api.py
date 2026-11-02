@@ -202,3 +202,168 @@ def test_stale_workflow_is_not_returned_for_newer_extraction(
         == "current_validation_required"
     )
     assert route.json()["detail"]["code"] != "workflow_not_found"
+
+
+def _seed_review_workflow(client: TestClient) -> UUID:
+    invoice_id = _seed_invoice_with_extraction(
+        client, make_invoice(total_amount="105.00").model_dump(mode="json")
+    )
+    validation = client.post(f"/api/v1/invoices/{invoice_id}/validate")
+    assert validation.status_code == 200
+    assert validation.json()["final_decision"] == "REVIEW_REQUIRED"
+    routed = client.post(ROUTE_URL.format(invoice_id))
+    assert routed.status_code == 200
+    assert routed.json()["state"] == "NEEDS_REVIEW"
+    return invoice_id
+
+
+def test_review_api_accept_exception_completes_lifecycle(
+    client: TestClient, engine: Engine
+) -> None:
+    invoice_id = _seed_review_workflow(client)
+    request_id = uuid4()
+
+    response = client.post(
+        f"/api/v1/invoices/{invoice_id}/workflow/review",
+        json={
+            "decision": "ACCEPT_EXCEPTION",
+            "resolution_request_id": str(request_id),
+            "note": "Approved after review.",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["state"] == "EXCEPTION_ACCEPTED"
+    assert payload["state_version"] == 2
+    assert payload["validation_decision"] == "REVIEW_REQUIRED"
+    assert payload["review_case"]["status"] == "RESOLVED"
+    assert payload["review_case"]["resolution"] == "ACCEPT_EXCEPTION"
+    assert payload["review_case"]["resolution_request_id"] == str(request_id)
+    assert payload["review_case"]["resolved_at"] is not None
+    with Session(engine) as session:
+        validation = session.execute(select(InvoiceValidation)).scalar_one()
+        assert validation.final_decision == "REVIEW_REQUIRED"
+    assert client.get(READ_URL.format(invoice_id)).json()["state"] == (
+        "EXCEPTION_ACCEPTED"
+    )
+
+
+def test_review_api_reject_completes_lifecycle(client: TestClient) -> None:
+    invoice_id = _seed_review_workflow(client)
+    response = client.post(
+        f"/api/v1/invoices/{invoice_id}/workflow/review",
+        json={
+            "decision": "REJECT",
+            "resolution_request_id": str(uuid4()),
+        },
+    )
+    assert response.status_code == 200
+    assert response.json()["state"] == "REJECTED"
+    assert response.json()["review_case"]["resolution"] == "REJECT"
+
+
+def test_review_api_invalid_decision_is_unprocessable(client: TestClient) -> None:
+    invoice_id = _seed_review_workflow(client)
+    response = client.post(
+        f"/api/v1/invoices/{invoice_id}/workflow/review",
+        json={"decision": "PASS", "resolution_request_id": str(uuid4())},
+    )
+    assert response.status_code == 422
+
+
+def test_review_api_idempotency_and_conflict(client: TestClient) -> None:
+    invoice_id = _seed_review_workflow(client)
+    request_id = str(uuid4())
+    url = f"/api/v1/invoices/{invoice_id}/workflow/review"
+    body = {
+        "decision": "ACCEPT_EXCEPTION",
+        "resolution_request_id": request_id,
+    }
+
+    first = client.post(url, json=body)
+    retry = client.post(url, json=body)
+    conflicting_request = client.post(
+        url,
+        json={"decision": "REJECT", "resolution_request_id": request_id},
+    )
+    different_request = client.post(
+        url,
+        json={"decision": "REJECT", "resolution_request_id": str(uuid4())},
+    )
+
+    assert first.status_code == retry.status_code == 200
+    assert retry.json() == first.json()
+    assert conflicting_request.status_code == 409
+    assert conflicting_request.json()["detail"]["code"] == "resolution_request_conflict"
+    assert different_request.status_code == 409
+    assert different_request.json()["detail"]["code"] == "review_already_resolved"
+
+
+def test_review_api_missing_workflow_maps_to_not_found(client: TestClient) -> None:
+    invoice_id = _seed_invoice_with_extraction(
+        client, make_invoice(total_amount="105.00").model_dump(mode="json")
+    )
+    assert client.post(f"/api/v1/invoices/{invoice_id}/validate").status_code == 200
+    response = client.post(
+        f"/api/v1/invoices/{invoice_id}/workflow/review",
+        json={
+            "decision": "ACCEPT_EXCEPTION",
+            "resolution_request_id": str(uuid4()),
+        },
+    )
+    assert response.status_code == 404
+    assert response.json()["detail"]["code"] == "workflow_not_found"
+
+
+def test_review_api_non_reviewable_workflow_maps_to_conflict(
+    client: TestClient, engine: Engine
+) -> None:
+    invoice_id = _seed_invoice_with_extraction(client)
+    validation = client.post(f"/api/v1/invoices/{invoice_id}/validate")
+    assert validation.status_code == 200
+    assert client.post(ROUTE_URL.format(invoice_id)).status_code == 200
+    response = client.post(
+        f"/api/v1/invoices/{invoice_id}/workflow/review",
+        json={
+            "decision": "ACCEPT_EXCEPTION",
+            "resolution_request_id": str(uuid4()),
+        },
+    )
+    assert response.status_code == 409
+
+
+def test_review_api_stale_workflow_maps_to_conflict(
+    client: TestClient, engine: Engine
+) -> None:
+    invoice_id = _seed_review_workflow(client)
+    with Session(engine) as session:
+        old = session.execute(
+            select(InvoiceStructuredExtraction).where(
+                InvoiceStructuredExtraction.invoice_id == invoice_id
+            )
+        ).scalar_one()
+        session.add(
+            InvoiceStructuredExtraction(
+                invoice_id=invoice_id,
+                text_extraction_id=old.text_extraction_id,
+                provider="fake",
+                model="fake-model",
+                prompt_version="invoice-extraction-v2",
+                schema_version="invoice-schema-v1",
+                status="success",
+                structured_data=_valid_data(),
+                created_at=old.created_at + timedelta(seconds=1),
+            )
+        )
+        session.commit()
+
+    response = client.post(
+        f"/api/v1/invoices/{invoice_id}/workflow/review",
+        json={
+            "decision": "ACCEPT_EXCEPTION",
+            "resolution_request_id": str(uuid4()),
+        },
+    )
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "current_validation_required"

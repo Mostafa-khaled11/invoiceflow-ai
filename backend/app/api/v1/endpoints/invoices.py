@@ -37,6 +37,7 @@ from app.schemas.validations import (
     ValidationFindingResponse,
 )
 from app.schemas.workflows import (
+    InvoiceReviewResolutionRequest,
     InvoiceWorkflowResponse,
     InvoiceWorkflowRouteResponse,
     WorkflowReviewCaseResponse,
@@ -63,9 +64,11 @@ from app.services.invoice_validation import (
     validate_and_persist_invoice,
 )
 from app.services.invoice_workflow import (
+    ReviewResolutionError,
     WorkflowRoutingError,
     WorkflowRoutingResult,
     resolve_current_invoice_workflow,
+    resolve_invoice_review,
     route_invoice_workflow,
 )
 from app.services.structured_invoice_extraction import (
@@ -373,6 +376,35 @@ def get_invoice_workflow(
     return _workflow_response(result)
 
 
+@router.post(
+    "/{invoice_id}/workflow/review",
+    summary="Resolve the current invoice human-review case",
+    response_model=InvoiceWorkflowResponse,
+)
+def resolve_invoice_review_endpoint(
+    invoice_id: UUID,
+    request: InvoiceReviewResolutionRequest,
+    session: Annotated[Session, Depends(get_db)],
+) -> InvoiceWorkflowResponse:
+    """Apply one explicit, idempotent resolution to the current review case."""
+
+    try:
+        result = resolve_invoice_review(
+            session,
+            invoice_id,
+            request.decision,
+            str(request.resolution_request_id),
+            request.note,
+        )
+    except ReviewResolutionError as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail={"code": exc.error_code, "message": exc.message},
+        ) from exc
+
+    return _workflow_response(result)
+
+
 def _validation_response(run: InvoiceValidation) -> InvoiceValidationResponse:
     return InvoiceValidationResponse(
         validation_id=run.id,
@@ -424,6 +456,8 @@ def _workflow_response(result: WorkflowRoutingResult) -> InvoiceWorkflowResponse
                     if review_case.resolution is None
                     else ReviewResolution(review_case.resolution)
                 ),
+                resolved_at=review_case.resolved_at,
+                resolution_request_id=review_case.resolution_request_id,
             )
         ),
     )

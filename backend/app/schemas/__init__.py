@@ -7,6 +7,7 @@ from app.schemas.structured_extractions import (
     WarningCode,
 )
 from app.schemas.workflows import (
+    InvoiceReviewResolutionRequest,
     InvoiceWorkflowResponse,
     InvoiceWorkflowRouteResponse,
     WorkflowReviewCaseResponse,
@@ -20,4 +21,5 @@ __all__ = [
     "InvoiceWorkflowResponse",
     "InvoiceWorkflowRouteResponse",
     "WorkflowReviewCaseResponse",
+    "InvoiceReviewResolutionRequest",
 ]

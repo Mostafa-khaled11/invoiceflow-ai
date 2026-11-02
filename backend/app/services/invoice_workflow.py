@@ -1,18 +1,20 @@
 """Deterministic initial workflow routing for current invoice validation."""
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from app.models.invoice_structured_extraction import InvoiceStructuredExtraction
 from app.models.invoice_validation import InvoiceValidation
 from app.models.invoice_workflow import (
     InvoiceWorkflow,
     ReviewCase,
     ReviewCaseStatus,
+    ReviewResolution,
     WorkflowEvent,
     WorkflowEventType,
     WorkflowState,
@@ -47,6 +49,8 @@ class WorkflowReviewCaseResult:
     review_case_id: UUID
     status: str
     resolution: str | None
+    resolved_at: datetime | None
+    resolution_request_id: str | None
 
 
 @dataclass(frozen=True)
@@ -69,6 +73,16 @@ class WorkflowRoutingResult:
         """Compatibility accessor for callers that only need the identifier."""
 
         return self.review_case.review_case_id if self.review_case else None
+
+
+class ReviewResolutionError(RuntimeError):
+    """Controlled domain error for human-review resolution commands."""
+
+    def __init__(self, error_code: str, message: str, status_code: int) -> None:
+        super().__init__(message)
+        self.error_code = error_code
+        self.message = message
+        self.status_code = status_code
 
 
 def route_validation_decision(decision: str) -> WorkflowState:
@@ -116,7 +130,12 @@ def route_invoice_workflow(session: Session, invoice_id: UUID) -> WorkflowRoutin
                 exc.message,
                 exc.status_code,
             ) from exc
-        validation = find_validation_for_extraction(session, extraction.id)
+        locked_extraction = session.execute(
+            select(InvoiceStructuredExtraction)
+            .where(InvoiceStructuredExtraction.id == extraction.id)
+            .with_for_update()
+        ).scalar_one()
+        validation = find_validation_for_extraction(session, locked_extraction.id)
         if validation is None:
             raise WorkflowRoutingError(
                 "current_validation_required",
@@ -227,7 +246,12 @@ def resolve_current_invoice_workflow(
                 exc.message,
                 exc.status_code,
             ) from exc
-        validation = find_validation_for_extraction(session, extraction.id)
+        locked_extraction = session.execute(
+            select(InvoiceStructuredExtraction)
+            .where(InvoiceStructuredExtraction.id == extraction.id)
+            .with_for_update()
+        ).scalar_one()
+        validation = find_validation_for_extraction(session, locked_extraction.id)
         if validation is None:
             raise WorkflowRoutingError(
                 "current_validation_required",
@@ -263,6 +287,163 @@ def resolve_current_invoice_workflow(
         ) from exc
 
 
+def resolve_invoice_review(
+    session: Session,
+    invoice_id: UUID,
+    decision: ReviewResolution,
+    resolution_request_id: str,
+    note: str | None = None,
+) -> WorkflowRoutingResult:
+    """Resolve the current open review case under the invoice coordination lock."""
+
+    locked_invoice = lock_invoice_for_update(session, invoice_id)
+    if locked_invoice is None:
+        raise ReviewResolutionError("invoice_not_found", "Invoice not found", 404)
+
+    try:
+        try:
+            extraction = resolve_canonical_structured_extraction(session, invoice_id)
+        except InvoiceValidationError as exc:
+            raise ReviewResolutionError(
+                exc.error_code,
+                exc.message,
+                exc.status_code,
+            ) from exc
+
+        locked_extraction = session.execute(
+            select(InvoiceStructuredExtraction)
+            .where(InvoiceStructuredExtraction.id == extraction.id)
+            .with_for_update()
+        ).scalar_one()
+        validation = find_validation_for_extraction(session, locked_extraction.id)
+        if validation is None:
+            raise ReviewResolutionError(
+                "current_validation_required",
+                "The current structured extraction has not been validated yet.",
+                409,
+            )
+        validation = session.execute(
+            select(InvoiceValidation)
+            .where(InvoiceValidation.id == validation.id)
+            .with_for_update()
+        ).scalar_one()
+
+        workflow = session.execute(
+            select(InvoiceWorkflow)
+            .where(InvoiceWorkflow.validation_id == validation.id)
+            .with_for_update()
+        ).scalar_one_or_none()
+        if workflow is None:
+            raise ReviewResolutionError(
+                "workflow_not_found",
+                "The current validation has not been routed yet.",
+                404,
+            )
+
+        review_case = session.execute(
+            select(ReviewCase)
+            .where(ReviewCase.workflow_id == workflow.id)
+            .with_for_update()
+        ).scalar_one_or_none()
+        if review_case is None:
+            raise ReviewResolutionError(
+                "review_case_required",
+                "The current workflow has no review case.",
+                409,
+            )
+
+        if review_case.status == ReviewCaseStatus.RESOLVED.value:
+            if review_case.resolution_request_id != resolution_request_id:
+                raise ReviewResolutionError(
+                    "review_already_resolved",
+                    "The review case has already been resolved.",
+                    409,
+                )
+            if review_case.resolution != decision.value:
+                raise ReviewResolutionError(
+                    "resolution_request_conflict",
+                    "The resolution request ID was reused with a different decision.",
+                    409,
+                )
+            return _routing_result(
+                workflow,
+                validation,
+                _review_case_from_model(review_case),
+                False,
+            )
+
+        if workflow.state != WorkflowState.NEEDS_REVIEW.value:
+            raise ReviewResolutionError(
+                "workflow_not_reviewable",
+                "Only NEEDS_REVIEW workflows can be resolved by human review.",
+                409,
+            )
+        if review_case.status != ReviewCaseStatus.OPEN.value:
+            raise ReviewResolutionError(
+                "review_case_not_open",
+                "The review case is not open.",
+                409,
+            )
+
+        next_state = (
+            WorkflowState.EXCEPTION_ACCEPTED
+            if decision is ReviewResolution.ACCEPT_EXCEPTION
+            else WorkflowState.REJECTED
+        )
+        event_type = (
+            WorkflowEventType.EXCEPTION_ACCEPTED
+            if decision is ReviewResolution.ACCEPT_EXCEPTION
+            else WorkflowEventType.REJECTED
+        )
+        next_sequence = (
+            session.execute(
+                select(func.max(WorkflowEvent.sequence_number)).where(
+                    WorkflowEvent.workflow_id == workflow.id
+                )
+            ).scalar_one()
+            or 0
+        ) + 1
+        now = datetime.now(UTC)
+        previous_state = workflow.state
+        workflow.state = next_state.value
+        workflow.state_version += 1
+        review_case.status = ReviewCaseStatus.RESOLVED.value
+        review_case.resolution = decision.value
+        review_case.resolved_at = now
+        review_case.reviewer_id = None
+        review_case.reviewer_note = note
+        review_case.resolution_request_id = resolution_request_id
+        session.add(
+            WorkflowEvent(
+                workflow_id=workflow.id,
+                sequence_number=next_sequence,
+                event_type=event_type.value,
+                from_state=previous_state,
+                to_state=next_state.value,
+                actor_type="system",
+                reason="Human review resolution",
+                meta={"resolution_request_id": resolution_request_id},
+            )
+        )
+        session.commit()
+        return _routing_result(
+            workflow,
+            validation,
+            _review_case_from_model(review_case),
+            False,
+        )
+    except ReviewResolutionError:
+        session.rollback()
+        raise
+    except SQLAlchemyError as exc:
+        session.rollback()
+        raise ReviewResolutionError(
+            "review_persistence_failed",
+            "The review resolution could not be stored.",
+            500,
+        ) from exc
+
+
 def _review_case(
     session: Session, workflow_id: UUID
 ) -> WorkflowReviewCaseResult | None:
@@ -281,6 +462,8 @@ def _review_case_from_model(
         review_case_id=review_case.id,
         status=review_case.status,
         resolution=review_case.resolution,
+        resolved_at=review_case.resolved_at,
+        resolution_request_id=review_case.resolution_request_id,
     )
 
 

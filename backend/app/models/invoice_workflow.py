@@ -38,9 +38,11 @@ class WorkflowState(StrEnum):
 
 
 class WorkflowEventType(StrEnum):
-    """Currently supported audit event type."""
+    """Supported audit events for routing and human review resolution."""
 
     ROUTED = "ROUTED"
+    EXCEPTION_ACCEPTED = "EXCEPTION_ACCEPTED"
+    REJECTED = "REJECTED"
 
 
 class ReviewCaseStatus(StrEnum):
@@ -123,7 +125,7 @@ class WorkflowEvent(Base):
     __tablename__ = "workflow_events"
     __table_args__ = (
         CheckConstraint(
-            "event_type in ('ROUTED')",
+            "event_type in ('ROUTED', 'EXCEPTION_ACCEPTED', 'REJECTED')",
             name="ck_workflow_events_event_type",
         ),
         CheckConstraint(
