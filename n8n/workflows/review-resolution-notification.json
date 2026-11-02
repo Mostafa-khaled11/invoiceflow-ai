@@ -1,0 +1,26 @@
+{
+  "name": "InvoiceFlow - Review Resolution",
+  "nodes": [
+    {
+      "parameters": {"httpMethod": "POST", "path": "invoiceflow/review-resolved", "responseMode": "onReceived", "authentication": "headerAuth", "options": {}},
+      "id": "review-resolution-webhook",
+      "name": "Review Resolution Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [260, 300],
+      "webhookId": "invoiceflow-review-resolved"
+    },
+    {
+      "parameters": {"jsCode": "const event = $json.body ?? $json;\nif (event.event_type !== 'workflow.review_resolved') throw new Error('Unexpected event type');\nconst resolution = event.review_case?.resolution;\nconst notification = resolution === 'ACCEPT_EXCEPTION' ? 'Exception accepted' : resolution === 'REJECT' ? 'Invoice rejected' : 'Unknown resolution';\nreturn [{ json: { notification, event } }];"},
+      "id": "review-resolution-branch",
+      "name": "Branch Resolution Notification",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [520, 300]
+    }
+  ],
+  "connections": {"Review Resolution Webhook": {"main": [[{"node": "Branch Resolution Notification", "type": "main", "index": 0}]]}},
+  "active": false,
+  "settings": {},
+  "tags": []
+}

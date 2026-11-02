@@ -110,6 +110,28 @@ Stop the services with:
 docker compose down
 ```
 
+### Local n8n automation
+
+The optional n8n integration is disabled by default. Set `N8N_ENABLED=true`,
+provide `N8N_WEBHOOK_SECRET`, and start the stack with `docker compose up -d`.
+n8n is available at <http://localhost:5678>; complete its first-run owner setup,
+then import the three JSON workflows from `n8n/workflows/`. FastAPI sends
+post-commit events to n8n over the Compose network at `http://n8n:5678` and n8n
+queries the review API at `http://api:8000`. n8n never receives database
+credentials and never accesses PostgreSQL directly.
+
+Configure an n8n Header Auth credential named `InvoiceFlow Webhook Secret` for
+the two webhook workflows, using header `X-InvoiceFlow-Webhook-Secret` and the
+same local value as `N8N_WEBHOOK_SECRET`; exported workflow JSON intentionally
+contains no credential or secret values.
+
+The Review Required and Review Resolution workflows use n8n execution output
+as the local demonstration sink. The Aging Review Monitor runs every 15 minutes
+and filters open, current review cases using `AGING_REVIEW_THRESHOLD_MINUTES`.
+Automation delivery is best effort: business state is committed first, and a
+delivery failure is logged without changing the API response. Persistent retry
+and an outbox are future production enhancements.
+
 The PostgreSQL data remains in the named `postgres_data` volume. Remove it only
 when intentionally resetting local database state:
 

@@ -1,0 +1,33 @@
+{
+  "name": "InvoiceFlow - Aging Review Monitor",
+  "nodes": [
+    {
+      "parameters": {"rule": {"interval": [{"field": "minutes", "minutesInterval": 15}]}},
+      "id": "aging-schedule",
+      "name": "Every 15 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [220, 300]
+    },
+    {
+      "parameters": {"method": "GET", "url": "http://api:8000/api/v1/review-cases?status=OPEN&workflow_state=NEEDS_REVIEW&include_historical=false&limit=100", "options": {}},
+      "id": "review-queue-request",
+      "name": "Query Current Review Queue",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [480, 300]
+    },
+    {
+      "parameters": {"jsCode": "const threshold = Number($env.AGING_REVIEW_THRESHOLD_MINUTES ?? 60);\nconst cutoff = Date.now() - threshold * 60_000;\nconst items = ($json.items ?? []).filter((item) => Date.parse(item.created_at) <= cutoff);\nreturn items.map((item) => ({ json: { notification: `Aging review reminder: ${item.review_case_id}`, review_case: item } }));"},
+      "id": "aging-reminder",
+      "name": "Create Aging Reminders",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [740, 300]
+    }
+  ],
+  "connections": {"Every 15 Minutes": {"main": [[{"node": "Query Current Review Queue", "type": "main", "index": 0}]]}, "Query Current Review Queue": {"main": [[{"node": "Create Aging Reminders", "type": "main", "index": 0}]]}},
+  "active": false,
+  "settings": {},
+  "tags": []
+}

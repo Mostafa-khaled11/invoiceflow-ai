@@ -1,0 +1,26 @@
+{
+  "name": "InvoiceFlow - Review Required",
+  "nodes": [
+    {
+      "parameters": {"httpMethod": "POST", "path": "invoiceflow/review-required", "responseMode": "onReceived", "authentication": "headerAuth", "options": {}},
+      "id": "review-required-webhook",
+      "name": "Review Required Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [260, 300],
+      "webhookId": "invoiceflow-review-required"
+    },
+    {
+      "parameters": {"jsCode": "const event = $json.body ?? $json;\nif (event.event_type !== 'workflow.review_required') throw new Error('Unexpected event type');\nreturn [{ json: { notification: `Review required: ${event.invoice.id} (${event.invoice.filename}), case ${event.review_case.id}`, event } }];"},
+      "id": "review-required-notification",
+      "name": "Create Review Notification",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [520, 300]
+    }
+  ],
+  "connections": {"Review Required Webhook": {"main": [[{"node": "Create Review Notification", "type": "main", "index": 0}]]}},
+  "active": false,
+  "settings": {},
+  "tags": []
+}

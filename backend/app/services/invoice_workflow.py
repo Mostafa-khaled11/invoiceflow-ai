@@ -67,6 +67,8 @@ class WorkflowRoutingResult:
     created_at: datetime
     updated_at: datetime
     created: bool
+    event_id: UUID | None = None
+    event_created: bool = False
 
     @property
     def review_case_id(self) -> UUID | None:
@@ -163,18 +165,17 @@ def route_invoice_workflow(session: Session, invoice_id: UUID) -> WorkflowRoutin
         session.add(workflow)
         session.flush()
 
-        session.add(
-            WorkflowEvent(
-                workflow_id=workflow.id,
-                sequence_number=1,
-                event_type=WorkflowEventType.ROUTED.value,
-                from_state=None,
-                to_state=state.value,
-                actor_type="system",
-                reason="Initial deterministic validation routing",
-                meta={"validation_decision": validation.final_decision},
-            )
+        routing_event = WorkflowEvent(
+            workflow_id=workflow.id,
+            sequence_number=1,
+            event_type=WorkflowEventType.ROUTED.value,
+            from_state=None,
+            to_state=state.value,
+            actor_type="system",
+            reason="Initial deterministic validation routing",
+            meta={"validation_decision": validation.final_decision},
         )
+        session.add(routing_event)
 
         review_case_model: ReviewCase | None = None
         if validation.final_decision == FinalValidationDecision.REVIEW_REQUIRED.value:
@@ -189,6 +190,8 @@ def route_invoice_workflow(session: Session, invoice_id: UUID) -> WorkflowRoutin
             workflow,
             validation,
             _review_case_from_model(review_case_model),
+            True,
+            routing_event.id,
             True,
         )
     except (WorkflowRoutingError, UnsupportedValidationDecisionError):
@@ -414,7 +417,7 @@ def resolve_invoice_review(
         review_case.reviewer_note = note
         review_case.resolution_request_id = resolution_request_id
         session.add(
-            WorkflowEvent(
+            resolution_event := WorkflowEvent(
                 workflow_id=workflow.id,
                 sequence_number=next_sequence,
                 event_type=event_type.value,
@@ -431,6 +434,8 @@ def resolve_invoice_review(
             validation,
             _review_case_from_model(review_case),
             False,
+            resolution_event.id,
+            True,
         )
     except ReviewResolutionError:
         session.rollback()
@@ -472,6 +477,8 @@ def _routing_result(
     validation: InvoiceValidation,
     review_case: WorkflowReviewCaseResult | None,
     created: bool,
+    event_id: UUID | None = None,
+    event_created: bool = False,
 ) -> WorkflowRoutingResult:
     validation_id = validation.id
     return WorkflowRoutingResult(
@@ -485,6 +492,8 @@ def _routing_result(
         created_at=workflow.created_at,
         updated_at=workflow.updated_at,
         created=created,
+        event_id=event_id,
+        event_created=event_created,
     )
 
 

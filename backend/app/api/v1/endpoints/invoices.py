@@ -47,6 +47,7 @@ from app.services.business_validation import (
     ValidationRuleStatus,
     ValidationSeverity,
 )
+from app.services.integrations.n8n import deliver_workflow_event
 from app.services.invoice_files import (
     UploadValidationError,
     validate_invoice_pdf,
@@ -340,6 +341,7 @@ def get_invoice_validation(
 def route_invoice_workflow_endpoint(
     invoice_id: UUID,
     session: Annotated[Session, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_app_settings)],
 ) -> InvoiceWorkflowRouteResponse:
     """Create or retrieve the idempotent initial workflow for an invoice."""
 
@@ -351,6 +353,16 @@ def route_invoice_workflow_endpoint(
             detail={"code": exc.error_code, "message": exc.message},
         ) from exc
 
+    if result.state == WorkflowState.NEEDS_REVIEW.value:
+        invoice = session.get(Invoice, invoice_id)
+        if invoice is not None:
+            deliver_workflow_event(
+                result,
+                invoice_id,
+                invoice.original_filename,
+                result.validation_id,
+                settings,
+            )
     return _workflow_route_response(result)
 
 
@@ -385,6 +397,7 @@ def resolve_invoice_review_endpoint(
     invoice_id: UUID,
     request: InvoiceReviewResolutionRequest,
     session: Annotated[Session, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_app_settings)],
 ) -> InvoiceWorkflowResponse:
     """Apply one explicit, idempotent resolution to the current review case."""
 
@@ -402,6 +415,15 @@ def resolve_invoice_review_endpoint(
             detail={"code": exc.error_code, "message": exc.message},
         ) from exc
 
+    invoice = session.get(Invoice, invoice_id)
+    if invoice is not None:
+        deliver_workflow_event(
+            result,
+            invoice_id,
+            invoice.original_filename,
+            result.validation_id,
+            settings,
+        )
     return _workflow_response(result)
 
 

@@ -31,6 +31,11 @@ services:
       MAX_LLM_INPUT_CHARS: ${MAX_LLM_INPUT_CHARS:-20000}
       INVOICE_EXTRACTION_PROMPT_VERSION: ${INVOICE_EXTRACTION_PROMPT_VERSION:-invoice-extraction-v1}
       INVOICE_EXTRACTION_SCHEMA_VERSION: ${INVOICE_EXTRACTION_SCHEMA_VERSION:-invoice-schema-v1}
+      N8N_ENABLED: ${N8N_ENABLED:-false}
+      N8N_BASE_URL: ${N8N_BASE_URL:-http://n8n:5678}
+      N8N_WEBHOOK_SECRET: ${N8N_WEBHOOK_SECRET:-}
+      N8N_TIMEOUT_SECONDS: ${N8N_TIMEOUT_SECONDS:-5}
+      AGING_REVIEW_THRESHOLD_MINUTES: ${AGING_REVIEW_THRESHOLD_MINUTES:-60}
     volumes:
       - invoice_uploads:/var/lib/invoiceflow/invoices
     ports:
@@ -65,6 +70,21 @@ services:
       retries: 10
     restart: unless-stopped
 
+  n8n:
+    image: n8nio/n8n:latest
+    ports:
+      - "5678:5678"
+    environment:
+      N8N_HOST: 0.0.0.0
+      N8N_PORT: 5678
+      N8N_PROTOCOL: http
+      N8N_SECURE_COOKIE: "false"
+      N8N_PERSONALIZATION_ENABLED: "false"
+    volumes:
+      - n8n_data:/home/node/.n8n
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   invoice_uploads:
+  n8n_data:

@@ -33,6 +33,11 @@ class Settings(BaseSettings):
     max_llm_input_chars: int = Field(default=20_000, gt=0)
     invoice_extraction_prompt_version: str = "invoice-extraction-v1"
     invoice_extraction_schema_version: str = "invoice-schema-v1"
+    n8n_enabled: bool = False
+    n8n_base_url: str | None = None
+    n8n_webhook_secret: str | None = None
+    n8n_timeout_seconds: float = Field(default=5.0, gt=0)
+    aging_review_threshold_minutes: int = Field(default=60, ge=1)
 
     @property
     def cors_origin_list(self) -> list[str]:
