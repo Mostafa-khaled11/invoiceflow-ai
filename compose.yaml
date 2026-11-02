@@ -34,7 +34,7 @@ services:
     volumes:
       - invoice_uploads:/var/lib/invoiceflow/invoices
     ports:
-      - "8000:8000"
+      - "18000:8000"
     depends_on:
       db:
         condition: service_healthy
@@ -50,9 +50,9 @@ services:
     build:
       context: ./frontend
       args:
-        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000}
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:18000}
     environment:
-      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000}
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:18000}
     ports:
       - "5173:5173"
     depends_on:

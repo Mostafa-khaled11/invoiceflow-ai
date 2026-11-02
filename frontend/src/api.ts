@@ -24,7 +24,7 @@ export interface ReviewCase { review_case_id: string; invoice_id: string; workfl
 export interface ReviewCaseDetail extends ReviewCase { validation_summary: { decision: ValidationDecision; ruleset_version: string; finding_count: number; failed_rule_codes: string[]; failed_severities: string[] } }
 export interface ReviewPage { items: ReviewCase[]; limit: number; offset: number; total: number }
 
-const baseUrl = (import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000').replace(/\/$/, '');
+const baseUrl = (import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:18000').replace(/\/$/, '');
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let response: Response;
