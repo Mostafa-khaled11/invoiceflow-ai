@@ -1,77 +1,51 @@
-import { useEffect, useState } from 'react';
+/* eslint-disable react-hooks/set-state-in-effect, prefer-const */
+import { useEffect, useState, type ReactNode } from 'react';
+import { api, ApiError, type ReviewCase, type ReviewCaseDetail, type ReviewResolution } from './api';
 
-type ConnectionState = 'loading' | 'connected' | 'error';
+const go = (path: string) => {
+  window.history.pushState({}, '', path);
+  window.dispatchEvent(new PopStateEvent('popstate'));
+};
+const fmt = (value: string | null | undefined) => value ? new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : '—';
+function Badge({ value, kind = 'state' }: { value: string; kind?: string }) { return <span className={`badge badge-${value.toLowerCase()} badge-${kind}`}>{value.replaceAll('_', ' ')}</span>; }
+function ErrorBox({ error, retry }: { error: unknown; retry?: () => void }) { return <div className="state-panel error-panel"><strong>Unable to load this view</strong><p>{error instanceof ApiError ? error.message : 'Please try again.'}</p>{retry && <button className="button secondary" onClick={retry}>Try again</button>}</div>; }
+function Loading() { return <div className="state-panel"><div className="skeleton wide" /><div className="skeleton" /><div className="skeleton" /></div>; }
 
-const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000').replace(
-  /\/$/,
-  '',
-);
-
-function App() {
-  const [connectionState, setConnectionState] = useState<ConnectionState>('loading');
-  const [errorMessage, setErrorMessage] = useState('');
-
-  useEffect(() => {
-    const checkBackend = async () => {
-      setConnectionState('loading');
-      setErrorMessage('');
-
-      try {
-        const response = await fetch(`${apiBaseUrl}/api/v1/health`);
-        if (!response.ok) {
-          throw new Error(`Backend returned HTTP ${response.status}`);
-        }
-        const payload: unknown = await response.json();
-        if (
-          !payload ||
-          typeof payload !== 'object' ||
-          !('status' in payload) ||
-          payload.status !== 'ok'
-        ) {
-          throw new Error('Backend returned an unexpected health response');
-        }
-        setConnectionState('connected');
-      } catch (error) {
-        setConnectionState('error');
-        setErrorMessage(error instanceof Error ? error.message : 'Unable to reach the backend');
-      }
-    };
-
-    void checkBackend();
-  }, []);
-
-  const statusLabel = {
-    loading: 'Checking backend…',
-    connected: 'Backend connected',
-    error: 'Backend unavailable',
-  }[connectionState];
-
-  return (
-    <main className="app-shell">
-      <section className="hero-card" aria-labelledby="app-title">
-        <div className="eyebrow">Invoice operations workspace</div>
-        <h1 id="app-title">InvoiceFlow AI</h1>
-        <p className="intro">
-          A focused foundation for reliable invoice processing, validation, and human review.
-        </p>
-
-        <div className={`connection-card ${connectionState}`} role="status" aria-live="polite">
-          <span className="status-dot" aria-hidden="true" />
-          <div>
-            <strong>{statusLabel}</strong>
-            {connectionState === 'loading' && <p>Contacting the FastAPI service.</p>}
-            {connectionState === 'connected' && <p>API health check passed successfully.</p>}
-            {connectionState === 'error' && <p>{errorMessage}</p>}
-          </div>
-        </div>
-
-        <footer>
-          <span>API base</span>
-          <code>{apiBaseUrl}</code>
-        </footer>
-      </section>
-    </main>
-  );
+function Shell({ path, children }: { path: string; children: ReactNode }) {
+  return <div className="app-frame"><aside className="sidebar"><div className="brand"><div className="brand-mark">IF</div><div><strong>InvoiceFlow</strong><span>Operations workspace</span></div></div><nav><button className={path.startsWith('/reviews') || path === '/' ? 'nav-link active' : 'nav-link'} onClick={() => go('/reviews')}>◈ &nbsp; Review queue</button><button className={path.startsWith('/invoices') ? 'nav-link active' : 'nav-link'} onClick={() => go('/invoices')}>▤ &nbsp; Invoices</button></nav><div className="sidebar-footer"><span className="online-dot" /> API workspace<br /><small>Human review enabled</small></div></aside><main className="main-content"><header className="topbar"><span><b>InvoiceFlow AI</b> <i>/</i> {path.startsWith('/reviews') || path === '/' ? 'Human review' : 'Invoices'}</span><span className="environment-pill">LOCAL</span></header>{children}</main></div>;
 }
 
+function ReviewQueue() {
+  const search = new URLSearchParams(window.location.search);
+  const offset = Number(search.get('offset') ?? 0);
+  const resolution = search.get('resolution') ?? '';
+  const [status, setStatus] = useState(search.get('status') ?? '');
+  const [state, setState] = useState(search.get('workflow_state') ?? '');
+  const [historical, setHistorical] = useState(search.get('include_historical') === 'true');
+  const [page, setPage] = useState<{ items: ReviewCase[]; total: number } | null>(null);
+  const [error, setError] = useState<unknown>(null);
+  const load = () => { setError(null); const params = new URLSearchParams({ limit: '20', offset: String(offset) }); if (status) params.set('status', status); if (state) params.set('workflow_state', state); if (resolution) params.set('resolution', resolution); if (historical) params.set('include_historical', 'true'); api.reviews.list(params).then(setPage).catch(setError); };
+  useEffect(load, [status, state, resolution, historical, offset]);
+  const filter = (key: string, value: string | boolean) => { if (key === 'status') setStatus(value as string); if (key === 'workflow_state') setState(value as string); if (key === 'historical') setHistorical(value as boolean); const params = new URLSearchParams(); if (key === 'status' ? value : status) params.set('status', String(key === 'status' ? value : status)); if (key === 'workflow_state' ? value : state) params.set('workflow_state', String(key === 'workflow_state' ? value : state)); if (key === 'historical' ? value : historical) params.set('include_historical', 'true'); window.history.replaceState({}, '', `/reviews?${params}`); };
+  return <section className="page"><div className="page-heading"><div><p className="eyebrow">Operations / human review</p><h1>Review queue</h1><p className="subtitle">Resolve invoices that need a human decision before they continue.</p></div><div className="queue-count"><strong>{page?.total ?? '—'}</strong><span>{historical ? 'matching cases' : 'actionable now'}</span></div></div><div className="filter-bar"><label>Status<select value={status} onChange={e => filter('status', e.target.value)}><option value="">All statuses</option><option value="OPEN">Open</option><option value="RESOLVED">Resolved</option></select></label><label>Workflow state<select value={state} onChange={e => filter('workflow_state', e.target.value)}><option value="">All states</option><option value="NEEDS_REVIEW">Needs review</option><option value="EXCEPTION_ACCEPTED">Exception accepted</option><option value="REJECTED">Rejected</option></select></label><label className="checkbox-label"><input type="checkbox" checked={historical} onChange={e => filter('historical', e.target.checked)} /> Include historical</label></div>{!page ? <Loading /> : error ? <ErrorBox error={error} retry={load} /> : page.items.length === 0 ? <div className="empty-state"><div className="empty-icon">✓</div><h2>{historical ? 'No matching review cases' : 'No invoices currently require review'}</h2><p>Your actionable queue is clear.</p></div> : <><div className="table-card"><table><thead><tr><th>Invoice</th><th>Validation</th><th>Workflow</th><th>Review</th><th>Created</th><th /></tr></thead><tbody>{page.items.map(item => <tr key={item.review_case_id}><td><button className="link-button invoice-link" onClick={() => go(`/reviews/${item.review_case_id}`)}><strong>{item.invoice_filename}</strong><small>{item.invoice_id.slice(0, 8)}…</small></button></td><td><Badge value={item.validation_decision} kind="decision" /></td><td><Badge value={item.workflow_state} /></td><td><Badge value={item.status} kind="review" /></td><td className="muted">{fmt(item.created_at)}</td><td><button className="button secondary compact" onClick={() => go(`/reviews/${item.review_case_id}`)}>Open →</button></td></tr>)}</tbody></table></div><div className="pagination"><span>Showing {offset + 1}–{Math.min(offset + 20, page.total)} of {page.total}</span><button className="button secondary compact" disabled={offset + 20 >= page.total} onClick={() => go(`/reviews?offset=${offset + 20}`)}>Next →</button></div></>}</section>;
+}
+
+function ReviewQueueScreen() {
+  const value = new URLSearchParams(window.location.search).get('resolution') ?? '';
+  return <><div className="page resolution-filter"><label>Resolution<select value={value} onChange={event => { const params = new URLSearchParams(window.location.search); if (event.target.value) params.set('resolution', event.target.value); else params.delete('resolution'); params.delete('offset'); window.location.href = `/reviews?${params}`; }}><option value="">All resolutions</option><option value="ACCEPT_EXCEPTION">Accepted</option><option value="REJECT">Rejected</option></select></label></div><ReviewQueue /></>;
+}
+
+function ReviewDetail({ id }: { id: string }) {
+  const [data, setData] = useState<ReviewCaseDetail | null>(null); const [error, setError] = useState<unknown>(null); const [note, setNote] = useState(''); const [decision, setDecision] = useState<ReviewResolution | null>(null); const [pending, setPending] = useState<string | null>(null); const [busy, setBusy] = useState(false);
+  const load = () => { setError(null); api.reviews.get(id).then(setData).catch(setError); }; useEffect(load, [id]);
+  const resolve = (choice: ReviewResolution) => { const requestId = pending ?? crypto.randomUUID(); setPending(requestId); setBusy(true); api.invoices.resolve(data!.invoice_id, choice, requestId, note).then(() => { setDecision(null); setPending(null); load(); }).catch(setError).finally(() => setBusy(false)); };
+  if (error) return <section className="page"><ErrorBox error={error} retry={load} /></section>; if (!data) return <section className="page"><Loading /></section>;
+  return <section className="page"><button className="back-link" onClick={() => go('/reviews')}>← Back to review queue</button><div className="page-heading detail-heading"><div><p className="eyebrow">Review case</p><h1>{data.invoice_filename}</h1><p className="subtitle">Case {data.review_case_id.slice(0, 8)}… · {fmt(data.created_at)}</p></div><Badge value={data.workflow_state} /></div>{!data.is_current && <div className="notice historical-notice"><strong>Historical review</strong><span>This case belongs to an older processing version and cannot be modified.</span></div>}<div className="detail-grid"><div className="detail-main"><div className="card"><div className="card-title"><span>Validation summary</span><Badge value={data.validation_decision} kind="decision" /></div><div className="metric-grid"><div><span>Decision</span><strong>{data.validation_summary.decision.replaceAll('_', ' ')}</strong></div><div><span>Ruleset</span><strong>{data.validation_summary.ruleset_version}</strong></div><div><span>Findings</span><strong>{data.validation_summary.finding_count}</strong></div></div><div className="reason-list"><span className="label">Failed rules</span>{data.validation_summary.failed_rule_codes.map((code, i) => <div className="reason-row" key={code}><code>{code}</code><span>{data.validation_summary.failed_severities[i] ?? 'Review'}</span></div>)}</div></div><div className="card"><div className="card-title"><span>Workflow</span><Badge value={data.workflow_state} /></div><div className="info-list"><div><span>State version</span><strong>v{data.state_version}</strong></div><div><span>Current</span><strong>{data.is_current ? 'Yes' : 'No'}</strong></div><div><span>Actionable</span><strong>{data.is_actionable ? 'Yes' : 'No'}</strong></div></div></div></div><aside className="detail-side"><div className="card decision-card"><div className="card-title"><span>Review decision</span><Badge value={data.status} kind="review" /></div>{data.status === 'RESOLVED' ? <div className="resolved-message"><div className="resolved-icon">✓</div><strong>{data.resolution === 'ACCEPT_EXCEPTION' ? 'Exception accepted' : 'Invoice rejected'}</strong><p>Resolved {fmt(data.resolved_at)}</p></div> : data.is_actionable ? <><label className="note-label" htmlFor="note">Reviewer note <span>Optional</span></label><textarea id="note" value={note} onChange={e => setNote(e.target.value)} maxLength={2000} /><button className="button primary full" disabled={busy} onClick={() => setDecision('ACCEPT_EXCEPTION')}>Accept exception</button><button className="button danger full" disabled={busy} onClick={() => setDecision('REJECT')}>Reject invoice</button></> : <p className="muted">This review is not actionable.</p>}</div></aside></div>{decision && <div className="modal-backdrop"><div className="modal" role="dialog" aria-modal="true"><p className="eyebrow">Confirm decision</p><h2>{decision === 'ACCEPT_EXCEPTION' ? 'Accept this exception?' : 'Reject this invoice?'}</h2><p>{decision === 'ACCEPT_EXCEPTION' ? 'This accepts the known exception. It does not mark validation as PASS.' : 'This will reject the invoice workflow.'}</p><div className="modal-actions"><button className="button secondary" onClick={() => setDecision(null)}>Cancel</button><button className={`button ${decision === 'REJECT' ? 'danger' : 'primary'}`} disabled={busy} onClick={() => resolve(decision)}>{busy ? 'Saving…' : 'Confirm'}</button></div></div></div>}</section>;
+}
+
+function InvoiceWorkspace() { const [id, setId] = useState(''); return <section className="page"><div className="page-heading"><div><p className="eyebrow">Operations</p><h1>Invoices</h1><p className="subtitle">Open an invoice by ID to inspect extraction, validation, and workflow state.</p></div></div><div className="card lookup-card"><label htmlFor="invoice-id">Invoice ID</label><div className="lookup-row"><input id="invoice-id" value={id} onChange={e => setId(e.target.value)} placeholder="Invoice UUID" /><button className="button primary" disabled={!id.trim()} onClick={() => go(`/invoices/${id.trim()}`)}>Open invoice</button></div><p className="muted">Invoice browsing will be connected when a collection endpoint is available.</p></div></section>; }
+
+function InvoiceDetail({ id }: { id: string }) { const [invoice, setInvoice] = useState<import('./api').Invoice | null>(null); const [validation, setValidation] = useState<import('./api').Validation | null>(null); const [workflow, setWorkflow] = useState<import('./api').Workflow | null>(null); const [error, setError] = useState<unknown>(null); const load = () => { Promise.allSettled([api.invoices.get(id), api.invoices.validation(id), api.invoices.workflow(id)]).then(([i, v, w]) => { if (i.status === 'rejected') setError(i.reason); else setInvoice(i.value); if (v.status === 'fulfilled') setValidation(v.value); if (w.status === 'fulfilled') setWorkflow(w.value); }); }; useEffect(load, [id]); if (error) return <section className="page"><ErrorBox error={error} retry={load} /></section>; if (!invoice) return <section className="page"><Loading /></section>; return <section className="page"><button className="back-link" onClick={() => go('/invoices')}>← Invoice workspace</button><div className="page-heading"><div><p className="eyebrow">Invoice detail</p><h1>{invoice.filename}</h1><p className="subtitle">{invoice.invoice_id}</p></div></div><div className="detail-grid"><div className="detail-main"><div className="card"><div className="card-title">Invoice information</div><div className="info-list"><div><span>Filename</span><strong>{invoice.filename}</strong></div><div><span>Uploaded</span><strong>{fmt(invoice.created_at)}</strong></div><div><span>Status</span><strong>{invoice.status.replaceAll('_', ' ')}</strong></div></div></div><div className="card"><div className="card-title">Validation {validation && <Badge value={validation.final_decision} kind="decision" />}</div>{validation ? <><div className="metric-grid"><div><span>Ruleset</span><strong>{validation.ruleset_version}</strong></div><div><span>Passed</span><strong>{validation.pass_count}</strong></div><div><span>Failed</span><strong>{validation.fail_count}</strong></div></div><div className="reason-list">{validation.findings.filter(f => f.status === 'FAIL').map(f => <div className="reason-row" key={f.rule_id}><code>{f.rule_id}</code><span>{f.message}</span></div>)}</div></> : <p className="muted">Validation has not been completed.</p>}</div></div><aside className="detail-side"><div className="card"><div className="card-title">Workflow {workflow && <Badge value={workflow.state} />}</div>{workflow ? <><div className="info-list"><div><span>State version</span><strong>v{workflow.state_version}</strong></div><div><span>Validation decision</span><strong>{workflow.validation_decision.replaceAll('_', ' ')}</strong></div></div>{workflow.review_case && <button className="button primary full" onClick={() => go(`/reviews/${workflow.review_case!.review_case_id}`)}>Open review case</button>}</> : <p className="muted">Workflow has not been routed yet.</p>}</div></aside></div></section>; }
+
+function App() { const [path, setPath] = useState(window.location.pathname); useEffect(() => { const handler = () => setPath(window.location.pathname); window.addEventListener('popstate', handler); return () => window.removeEventListener('popstate', handler); }, []); let content: ReactNode = path.startsWith('/reviews/') ? <ReviewDetail id={path.split('/')[2]} /> : path.startsWith('/invoices/') ? <InvoiceDetail id={path.split('/')[2]} /> : path === '/' || path === '/reviews' ? <ReviewQueueScreen /> : <InvoiceWorkspace />; return <Shell path={path}>{content}</Shell>; }
 export default App;
