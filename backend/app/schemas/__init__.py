@@ -1,5 +1,11 @@
 """Typed API request and response models."""
 
+from app.schemas.review_cases import (
+    ReviewCaseDetailResponse,
+    ReviewCasePageResponse,
+    ReviewCaseResponse,
+    ReviewValidationSummary,
+)
 from app.schemas.structured_extractions import (
     InvoiceLineItem,
     StructuredExtractionResponse,
@@ -22,4 +28,8 @@ __all__ = [
     "InvoiceWorkflowRouteResponse",
     "WorkflowReviewCaseResponse",
     "InvoiceReviewResolutionRequest",
+    "ReviewCaseDetailResponse",
+    "ReviewCasePageResponse",
+    "ReviewCaseResponse",
+    "ReviewValidationSummary",
 ]
