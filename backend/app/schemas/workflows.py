@@ -10,7 +10,7 @@ from app.models.invoice_workflow import (
     ReviewResolution,
     WorkflowState,
 )
-from app.services.business_validation import FinalValidationDecision
+from app.services.business_validation.models import FinalValidationDecision
 
 
 class WorkflowReviewCaseResponse(BaseModel):

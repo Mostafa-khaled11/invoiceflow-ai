@@ -132,6 +132,25 @@ Automation delivery is best effort: business state is committed first, and a
 delivery failure is logged without changing the API response. Persistent retry
 and an outbox are future production enhancements.
 
+### Live backend-to-n8n verification
+
+The deterministic harness is dry-run by default. From the repository root:
+
+```powershell
+Set-Location backend
+..\.venv\Scripts\python.exe -m app.scripts.live_e2e
+..\.venv\Scripts\python.exe -m app.scripts.live_e2e --execute --output ..\.runtime\live-e2e\evidence.json
+```
+
+The first command performs no writes or webhook calls. The explicit
+`--execute` command creates uniquely identified synthetic invoices through the
+existing validation and workflow services, exercises Review Required,
+ACCEPT_EXCEPTION, REJECT, and idempotent replay, then writes redacted evidence.
+It never deletes records, resets migrations, truncates tables, or calls Groq.
+After execution, open n8n **Executions** and match each evidence `event_id` to
+the corresponding webhook execution payload. An HTTP 200 alone is only
+`WEBHOOK_ACCEPTED`, not proof of `N8N_EXECUTION_VERIFIED`.
+
 The PostgreSQL data remains in the named `postgres_data` volume. Remove it only
 when intentionally resetting local database state:
 

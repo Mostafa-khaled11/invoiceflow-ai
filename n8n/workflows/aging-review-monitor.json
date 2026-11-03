@@ -18,7 +18,7 @@
       "position": [480, 300]
     },
     {
-      "parameters": {"jsCode": "const threshold = Number($env.AGING_REVIEW_THRESHOLD_MINUTES ?? 60);\nconst cutoff = Date.now() - threshold * 60_000;\nconst items = ($json.items ?? []).filter((item) => Date.parse(item.created_at) <= cutoff);\nreturn items.map((item) => ({ json: { notification: `Aging review reminder: ${item.review_case_id}`, review_case: item } }));"},
+      "parameters": {"jsCode": "const thresholdMinutes = 60;\nconst cutoff = Date.now() - thresholdMinutes * 60_000;\nconst response = $input.first()?.json ?? {};\nconst items = Array.isArray(response.items) ? response.items : [];\nconst reminders = items.filter((item) => {\n  const createdAt = Date.parse(item.created_at ?? '');\n  return item.is_current === true && item.is_actionable === true && Number.isFinite(createdAt) && createdAt <= cutoff;\n});\nreturn reminders.map((item) => ({ json: { notification: `Aging review reminder: ${item.review_case_id}`, review_case: item, processed_limit: 100, truncated: Number(response.total ?? 0) > items.length } }));"},
       "id": "aging-reminder",
       "name": "Create Aging Reminders",
       "type": "n8n-nodes-base.code",
