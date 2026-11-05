@@ -165,8 +165,9 @@ flowchart LR
 ~~~
 
 .github/workflows/ci.yml contains these five jobs. Local YAML parsing,
-actionlint, and command-equivalent checks pass; the workflow has not executed
-on GitHub because no push has been made.
+actionlint, and command-equivalent checks pass. The first hosted run exposed a
+clean-checkout benchmark bootstrap gap; the follow-up fix is pending hosted
+confirmation.
 
 ## Trust and release boundaries
 

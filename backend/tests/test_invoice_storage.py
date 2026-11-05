@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+import pytest
 from app.services.invoice_storage import InvoiceStorage, InvoiceStorageError
 
 PDF_BYTES = b"%PDF-1.7\n1 0 obj\n<</Type/Catalog>>\nendobj\n%%EOF\n"
@@ -94,15 +95,32 @@ def test_discard_removes_stage(tmp_path: Path) -> None:
     assert list((storage.root / ".staging").iterdir()) == []
 
 
-def test_unsafe_storage_keys_are_rejected(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    "unsafe_key",
+    (
+        "../invoice.pdf",
+        r"..\invoice.pdf",
+        "sub/invoice.pdf",
+        r"sub\invoice.pdf",
+        "/invoice.pdf",
+        r"C:\temp\invoice.pdf",
+        "C:invoice.pdf",
+        ".",
+        "..",
+        "",
+    ),
+)
+def test_unsafe_storage_keys_are_rejected(
+    tmp_path: Path, unsafe_key: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
     storage = _make_storage(tmp_path)
 
-    for unsafe_key in ("sub/x.pdf", "..\\x.pdf", "..", ""):
-        try:
-            storage.commit_staged(storage.root / "whatever.pdf", unsafe_key)
-            raise AssertionError(f"key {unsafe_key!r} should have been rejected")
-        except InvoiceStorageError:
-            continue
+    def unexpected_replace(*_args: Any, **_kwargs: Any) -> None:
+        raise AssertionError("unsafe key reached filesystem replacement")
+
+    monkeypatch.setattr("app.services.invoice_storage.os.replace", unexpected_replace)
+    with pytest.raises(InvoiceStorageError, match="unsafe storage key"):
+        storage.commit_staged(storage.root / "whatever.pdf", unsafe_key)
 
 
 def test_staging_failure_cleans_the_partial_file(tmp_path: Path) -> None:

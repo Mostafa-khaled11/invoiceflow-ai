@@ -169,8 +169,10 @@ python -m pip_audit --local --format=columns
 ~~~
 
 See docs/milestones/8b-ci-pipeline.md for the matching GitHub Actions design.
-The workflow is locally validated but has not run on GitHub until the first
-push.
+The first GitHub-hosted run exposed a clean-checkout evaluation-dataset gap;
+Milestone 8E.2 adds deterministic dataset generation and validation before
+pytest, plus cross-platform storage-key validation. A subsequent hosted run is
+still required to confirm the fix.
 
 ## API surface
 
@@ -234,8 +236,9 @@ The latest local evidence recorded in the milestone reports is:
   lines 88.00%.
 - Ruff, Pyright, ESLint, TypeScript/Vite build, npm audits, Python audits, and
   Compose validation: PASS.
-- Milestone 7B n8n workflow: live-verified previously; the current CI workflow
-  has not yet executed on GitHub.
+- Milestone 7B n8n workflow: live-verified previously. The first CI workflow
+  run exposed backend issues addressed by Milestone 8E.2; hosted confirmation
+  of this fix remains pending.
 
 These are local development results, not a claim of production certification
 or remote CI success. Detailed evidence remains in

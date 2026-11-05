@@ -81,5 +81,18 @@ python -c "from pathlib import Path; from evaluation.validator import validate_d
 The generator uses a local seeded random generator, `Decimal` arithmetic, and
 ReportLab `4.4.10` with invariant PDF metadata. It makes no network calls.
 
+The full generated benchmark is intentionally excluded from Git. A fresh
+checkout must bootstrap it before running the complete test suite:
+
+```powershell
+python -m evaluation.generate_dataset --seed 42 --output-dir evaluation
+python -c "from pathlib import Path; from evaluation.validator import validate_dataset; print(validate_dataset(Path('evaluation')))"
+python -m pytest -q
+```
+
+GitHub Actions performs the same generation and validation steps in the
+`backend-quality` job before Pytest. Do not commit generated PDFs or benchmark
+outputs.
+
 The optional live Groq smoke test is deliberately unrelated to this package and
 must not be run for dataset generation.

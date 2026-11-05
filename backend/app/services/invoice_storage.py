@@ -102,10 +102,17 @@ class InvoiceStorage:
     def _resolve(self, key: str) -> Path:
         """Resolve a storage key inside the root, rejecting unsafe forms."""
 
-        if not key or Path(key).name != key:
+        portable_key = key.replace("\\", "/")
+        if (
+            not portable_key
+            or portable_key in {".", ".."}
+            or "/" in portable_key
+            or portable_key.startswith("/")
+            or (len(portable_key) >= 2 and portable_key[1] == ":")
+        ):
             raise InvoiceStorageError("unsafe storage key")
         root = self.root.resolve()
-        candidate = (root / key).resolve()
+        candidate = (root / portable_key).resolve()
         if candidate.parent != root:
             raise InvoiceStorageError("unsafe storage key")
         return candidate

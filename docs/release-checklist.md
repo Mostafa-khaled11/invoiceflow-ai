@@ -11,8 +11,9 @@ the first public push can be reviewed without changing product behavior.
   invoice data, and personal paths. Keep .env ignored and publish only
   .env.example placeholders.
 - Run the local quality gates in the root README and record the final counts.
-- Push only after reviewing the initial GitHub Actions run. The current
-  workflow has been validated locally but has not run remotely.
+- The first GitHub Actions run exposed a backend dataset-bootstrap and
+  cross-platform storage-key failure. A subsequent hosted run must confirm the
+  Milestone 8E.2 fix before release publication.
 - Consider pinning GitHub Actions to verified commit SHAs before treating CI as
   hardened public infrastructure; current references use maintained major tags.
 
@@ -31,6 +32,6 @@ badge, or deployment badge before those artifacts exist.
 ## Release claims to preserve
 
 Describe local test evidence as local evidence. Do not claim production
-certification, exactly-once n8n delivery, remote CI success before the first
+certification, exactly-once n8n delivery, remote CI success before the follow-up
 run, or AI extraction accuracy that has not been measured against a governed
 dataset.

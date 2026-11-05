@@ -39,6 +39,14 @@ jobs:
           python -m pip install --upgrade pip==26.2.2
           python -m pip install -e "backend[dev,evaluation]"
 
+      - name: Generate deterministic evaluation dataset
+        run: python -m evaluation.generate_dataset --seed 42 --output-dir evaluation
+
+      - name: Validate evaluation dataset
+        run: >-
+          python -c "from pathlib import Path; from evaluation.validator import
+          validate_dataset; print(validate_dataset(Path('evaluation')))"
+
       - name: Run backend tests
         run: python -m pytest -q
 
