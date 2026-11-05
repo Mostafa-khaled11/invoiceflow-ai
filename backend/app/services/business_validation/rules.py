@@ -110,14 +110,16 @@ def line_item_arithmetic(data: StructuredInvoiceData) -> ValidationRuleResult:
         quantity = parse_money(item.quantity)
         unit_price = parse_money(item.unit_price)
         line_total = parse_money(item.line_total)
-        discount = parse_money(item.discount) or ZERO
-        tax = (
+        discount_value = parse_money(item.discount)
+        discount = discount_value if discount_value is not None else ZERO
+        tax_value = (
             parse_money(item.tax)
             if mode == TaxPresentation.LINE_ITEM
             else ZERO
             if mode == TaxPresentation.SUMMARY
             else None
         )
+        tax = tax_value
         missing_fields = [
             field
             for field, value in (
@@ -142,7 +144,10 @@ def line_item_arithmetic(data: StructuredInvoiceData) -> ValidationRuleResult:
             )
             continue
         assert (
-            quantity is not None and unit_price is not None and line_total is not None
+            quantity is not None
+            and unit_price is not None
+            and line_total is not None
+            and tax is not None
         )
         gross = quantize_money(quantity * unit_price)
         expected = quantize_money(gross - discount + tax)

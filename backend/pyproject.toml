@@ -14,7 +14,7 @@ dependencies = [
   "psycopg[binary]==3.2.10",
   "python-multipart==0.0.32",
   "pydantic-settings==2.11.0",
-  "pypdf==6.21.2",
+  "pypdf==6.21.4",
   "sqlalchemy==2.0.55",
   "uvicorn[standard]==0.37.0",
 ]
@@ -23,12 +23,12 @@ dependencies = [
 dev = [
   "httpx==0.28.1",
   "pyright==1.1.407",
-  "pytest==8.4.2",
+  "pytest==9.0.3",
   "pytest-cov==6.2.1",
   "ruff==0.14.2",
 ]
 evaluation = [
-  "pdfplumber==0.11.8",
+  "pdfplumber==0.11.10",
   "reportlab==4.4.10",
 ]
 

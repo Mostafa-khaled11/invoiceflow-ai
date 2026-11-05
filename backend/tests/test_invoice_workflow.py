@@ -384,6 +384,7 @@ def test_routing_does_not_mutate_validation_or_extraction(engine: Engine) -> Non
         extraction = session.get(InvoiceStructuredExtraction, extraction_id)
         validation = session.get(InvoiceValidation, validation_id)
         assert extraction is not None and validation is not None
+        assert extraction.structured_data is not None
         before_data = extraction.structured_data.copy()
         before_updated = extraction.updated_at
         before_decision = validation.final_decision
