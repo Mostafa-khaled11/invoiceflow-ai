@@ -164,10 +164,12 @@ flowchart LR
     Event --> I[infrastructure-validation]
 ~~~
 
-.github/workflows/ci.yml contains these five jobs. Local YAML parsing,
-actionlint, and command-equivalent checks pass. The first hosted run exposed a
-clean-checkout benchmark bootstrap gap; the follow-up fix is pending hosted
-confirmation.
+.github/workflows/ci.yml contains these five jobs. Local YAML parsing and
+command-equivalent checks pass; actionlint is not installed in the current
+Windows environment. The initial hosted run
+exposed a clean-checkout benchmark bootstrap gap and a cross-platform
+storage-key issue; Milestone 8E.2 fixed both and hosted CI Run #2 passed all
+five jobs. Release-candidate commits still require their own hosted run.
 
 ## Trust and release boundaries
 

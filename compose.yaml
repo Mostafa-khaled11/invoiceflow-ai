@@ -39,7 +39,7 @@ services:
     volumes:
       - invoice_uploads:/var/lib/invoiceflow/invoices
     ports:
-      - "18000:8000"
+      - "127.0.0.1:18000:8000"
     depends_on:
       db:
         condition: service_healthy
@@ -73,7 +73,7 @@ services:
   n8n:
     image: n8nio/n8n:latest
     ports:
-      - "5678:5678"
+      - "127.0.0.1:5678:5678"
     environment:
       N8N_HOST: 0.0.0.0
       N8N_PORT: 5678

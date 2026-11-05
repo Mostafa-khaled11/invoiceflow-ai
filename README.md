@@ -1,5 +1,7 @@
 # InvoiceFlow AI
 
+[![CI](https://github.com/Mostafa-khaled11/invoiceflow-ai/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/Mostafa-khaled11/invoiceflow-ai/actions/workflows/ci.yml) [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 InvoiceFlow AI is an AI-assisted invoice-processing and human-review workflow
 platform. It combines structured extraction, deterministic financial
 validation, PostgreSQL-backed workflow state, a React review interface, and
@@ -94,6 +96,9 @@ Invoke-WebRequest http://localhost:18000/api/v1/ready
 
 Open the review UI at http://localhost:5173, API documentation at
 http://localhost:18000/docs, and n8n at http://localhost:5678 when needed.
+These host ports are restricted to loopback by the provided Compose
+configuration; this is local-development hardening, not production HTTPS or
+authentication.
 The browser-visible frontend setting is VITE_API_BASE_URL=http://localhost:18000;
 the internal Compose API hostname is http://api:8000 and must not be used by
 the browser.
@@ -169,10 +174,10 @@ python -m pip_audit --local --format=columns
 ~~~
 
 See docs/milestones/8b-ci-pipeline.md for the matching GitHub Actions design.
-The first GitHub-hosted run exposed a clean-checkout evaluation-dataset gap;
-Milestone 8E.2 adds deterministic dataset generation and validation before
-pytest, plus cross-platform storage-key validation. A subsequent hosted run is
-still required to confirm the fix.
+The initial GitHub-hosted run exposed a clean-checkout evaluation-dataset gap
+and a cross-platform storage-key issue. Milestone 8E.2 added deterministic
+dataset generation and validation before pytest plus portable storage-key
+validation; GitHub-hosted CI Run #2 subsequently passed all five jobs.
 
 ## API surface
 
@@ -205,7 +210,7 @@ frontend/e2e/                Mocked Chromium workflows
 evaluation/                  Synthetic benchmark tooling and diagnostics
 n8n/workflows/               Exported local automation workflows
 docs/                        Current architecture, demo, roadmap, milestones
-.github/workflows/ci.yml     Pre-first-push quality and security pipeline
+.github/workflows/ci.yml     Quality and security pipeline
 compose.yaml                 Local API, frontend, PostgreSQL, and n8n topology
 ~~~
 
@@ -229,16 +234,16 @@ compose.yaml                 Local API, frontend, PostgreSQL, and n8n topology
 
 The latest local evidence recorded in the milestone reports is:
 
-- Backend and evaluation suite: 260 passed, 14 skipped, 7 warnings in the
-  current release-candidate run.
+- Backend and evaluation suite: 269 passed, 14 skipped, 7 warnings in the
+  latest local release-candidate run.
 - Frontend: 10 Vitest tests passed; 4 Chromium Playwright tests passed.
 - Frontend coverage: statements 69.23%, branches 69.23%, functions 60.34%,
   lines 88.00%.
 - Ruff, Pyright, ESLint, TypeScript/Vite build, npm audits, Python audits, and
   Compose validation: PASS.
-- Milestone 7B n8n workflow: live-verified previously. The first CI workflow
-  run exposed backend issues addressed by Milestone 8E.2; hosted confirmation
-  of this fix remains pending.
+- Milestone 7B n8n workflow: live-verified previously. GitHub-hosted CI Run #2
+  passed all five jobs after the Milestone 8E.2 fixes. The current release
+  candidate still requires hosted verification after its new commit.
 
 These are local development results, not a claim of production certification
 or remote CI success. Detailed evidence remains in
@@ -266,6 +271,14 @@ Platform, with Data Engineering first: analytics foundations and quality, then
 BI, AI extraction evaluation, duplicate/anomaly detection, MLOps, and only
 later predictive intelligence when suitable historical data exists. See
 docs/roadmap.md.
+
+## Product Preview
+
+Synthetic Playwright captures of the implemented review workspace:
+
+![InvoiceFlow AI review queue](docs/assets/review-queue.png)
+
+![InvoiceFlow AI review details](docs/assets/review-detail.png)
 
 ## Portfolio walkthrough
 

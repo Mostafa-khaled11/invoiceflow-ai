@@ -62,12 +62,13 @@ change the committed business state, and there is no transactional outbox yet.
 
 ### 7. Engineering quality — 45 seconds
 
-Show the milestone reports and .github/workflows/ci.yml: 260 backend/evaluation
-tests passed with 14 intentional skips in the current run, 10 Vitest tests passed, 4 mocked Chromium
+Show the milestone reports and .github/workflows/ci.yml: 269 backend/evaluation
+tests passed with 14 intentional skips in the latest local run, 10 Vitest tests passed, 4 mocked Chromium
 tests passed, and selected frontend coverage is 69.23% statements, 69.23%
 branches, 60.34% functions, and 88% lines. Mention Ruff, Pyright, ESLint,
-build, npm audit, Python audit, and Compose validation. State clearly that
-GitHub-hosted CI is pending the first push.
+build, npm audit, Python audit, and Compose validation. State that historical
+GitHub-hosted CI Run #2 passed all five jobs; the current release-candidate
+commit still needs a new hosted run.
 
 ### 8. Roadmap — 20 seconds
 

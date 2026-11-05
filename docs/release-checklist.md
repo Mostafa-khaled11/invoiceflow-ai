@@ -1,33 +1,31 @@
 # Public Release Checklist
 
 This checklist is intentionally separate from the application documentation so
-the first public push can be reviewed without changing product behavior.
+the v0.1.0 publication can be reviewed without changing product behavior.
 
-## Required before first push
+## Required before publication
 
-- The MIT license is now present in LICENSE. Confirm that this remains the
-  intended license before the first public push.
+- Confirm that the MIT license in LICENSE remains the intended license.
 - Review the complete tracked-file set for secrets, local credentials, private
   invoice data, and personal paths. Keep .env ignored and publish only
   .env.example placeholders.
 - Run the local quality gates in the root README and record the final counts.
 - The first GitHub Actions run exposed a backend dataset-bootstrap and
-  cross-platform storage-key failure. A subsequent hosted run must confirm the
-  Milestone 8E.2 fix before release publication.
-- Consider pinning GitHub Actions to verified commit SHAs before treating CI as
-  hardened public infrastructure; current references use maintained major tags.
+  cross-platform storage-key failure; GitHub-hosted CI Run #2 confirmed the
+  Milestone 8E.2 fix.
+- The current release-candidate commit must pass the five hosted CI jobs.
+- GitHub Actions references are pinned to verified full commit SHAs with
+  readable release comments.
 
-## Recommended badges after the repository URL exists
+## Repository presentation
 
 Add only badges with a real destination:
 
 1. GitHub Actions CI status for the repository's actual workflow path.
-2. Python and Node/React stack badges only if they help a reader understand
-   supported versions.
-3. A license badge only after a license is deliberately selected.
+2. MIT License badge linked to LICENSE.
 
-Do not add a repository-owner/name placeholder, coverage vanity badge, release
-badge, or deployment badge before those artifacts exist.
+Do not add a coverage vanity badge, release badge, or deployment badge before
+those artifacts exist.
 
 ## Release claims to preserve
 
