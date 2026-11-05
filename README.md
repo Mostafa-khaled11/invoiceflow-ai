@@ -1,312 +1,279 @@
 # InvoiceFlow AI
 
-InvoiceFlow AI is a portfolio-grade foundation for an AI-assisted invoice
-processing and workflow automation platform. This first runnable slice provides
-the local API, React shell, PostgreSQL connectivity, and migration scaffolding.
-Invoice extraction, uploads, authentication, approvals, workers, and n8n remain
-later implementation phases.
+InvoiceFlow AI is an AI-assisted invoice-processing and human-review workflow
+platform. It combines structured extraction, deterministic financial
+validation, PostgreSQL-backed workflow state, a React review interface, and
+best-effort n8n automation in a reproducible local development stack.
 
-## Tech stack
+This repository is a portfolio and development project. It is not presented as
+production-certified software.
 
-- Backend: Python 3.12+, FastAPI, Pydantic Settings, SQLAlchemy, Alembic
-- Frontend: React 19, TypeScript, Vite
-- Database: PostgreSQL 17
-- Local orchestration: Docker Compose
-- Quality: Pytest, Ruff, Pyright, ESLint, TypeScript
+## Problem and solution
 
-## Project structure
+Invoice processing is more than extracting fields from a PDF. A useful system
+must preserve the source document, make uncertainty visible, validate financial
+relationships, route exceptions to a person, and expose an auditable workflow.
 
-```text
-.
-├── backend/
-│   ├── app/
-│   │   ├── api/v1/endpoints/health.py
-│   │   ├── api/v1/endpoints/invoices.py
-│   │   ├── core/config.py
-│   │   ├── db/session.py
-│   │   ├── models/invoice.py
-│   │   ├── schemas/invoices.py
-│   │   └── services/
-│   ├── alembic/
-│   ├── tests/
-│   ├── Dockerfile
-│   └── pyproject.toml
-├── frontend/
-│   ├── src/App.tsx
-│   ├── package.json
-│   └── Dockerfile
-├── compose.yaml
-├── .env.example
-└── README.md
-```
+The current implementation connects:
 
-## Prerequisites
+- Groq structured extraction behind a versioned prompt and schema boundary.
+- Deterministic guardrails and the invoice-validation-v1 business ruleset.
+- PostgreSQL persistence for invoices, extraction results, validation findings,
+  workflow state, review cases, and append-only workflow events.
+- A React/TypeScript review queue and review-detail workflow.
+- Authenticated, post-commit n8n notifications for review-required and
+  review-resolution events.
+- Backend, frontend, browser, security, and infrastructure quality checks.
 
-- Docker Desktop with Docker Compose v2
-- Python 3.12+ for host-side backend checks
-- Node.js 20.19+ (or 22.12+) and npm for host-side frontend checks
+## Implemented capabilities
 
-## Environment setup
+- PDF intake validation, private named-volume storage, and SHA-256 duplicate
+  prevention.
+- Deterministic digital text-layer extraction with pypdf; OCR is not included.
+- Versioned structured invoice extraction with null-preserving safety behavior.
+- Financial/business validation with persisted rule findings and decisions:
+  PASS, WARNING, REVIEW_REQUIRED, and BLOCKED.
+- Initial workflow routing into READY, NEEDS_REVIEW, or BLOCKED.
+- Human review resolution through ACCEPT_EXCEPTION and REJECT, with idempotency
+  and state-versioned history.
+- Review queue and detail screens with loading, empty, error, retry, and
+  resolution states.
+- Optional n8n workflows for review-required notifications, resolutions, and
+  aging review monitoring.
 
-Copy `.env.example` to `.env` and replace the local PostgreSQL password
-placeholder. The password is used only by the local Compose database and API.
-Do not use production credentials in this file.
+## Architecture at a glance
 
-```powershell
+~~~mermaid
+flowchart LR
+    User[Operator] --> UI[React + TypeScript]
+    UI -->|HTTP| API[FastAPI API]
+    API --> Intake[Invoice intake and private storage]
+    API --> Extract[PDF text and structured extraction]
+    Extract --> Guardrails[Deterministic guardrails]
+    Guardrails --> Validate[Business validation]
+    Validate --> Workflow[Workflow routing and review]
+    Intake --> DB[(PostgreSQL)]
+    Validate --> DB
+    Workflow --> DB
+    Workflow -->|post-commit webhook| N8N[n8n automation]
+    Extract -->|server-side only| LLM[Groq provider]
+~~~
+
+The detailed implementation map is in
+[docs/architecture.md](docs/architecture.md). The original design proposal is
+intentionally preserved in [ARCHITECTURE.md](ARCHITECTURE.md) as historical
+project evidence.
+
+## Technology stack
+
+| Area | Technologies |
+| --- | --- |
+| Backend | Python 3.12+, FastAPI, Pydantic Settings, SQLAlchemy, Alembic |
+| Frontend | React 19, TypeScript, Vite |
+| AI boundary | Groq structured-output provider, versioned prompts and schema |
+| Database | PostgreSQL 17 |
+| Automation | n8n webhooks and scheduled workflow |
+| Testing | Pytest, Vitest, React Testing Library, MSW, Playwright |
+| Quality/security | Ruff, Pyright, ESLint, TypeScript build, pip-audit, npm audit |
+| Local infrastructure | Docker Compose, named volumes |
+
+## Quick start on Windows PowerShell
+
+Prerequisites: Docker Desktop with Compose v2, Python 3.12+, and Node.js
+20.19+ (or 22.12+) for host-side checks.
+
+~~~powershell
 Copy-Item .env.example .env
-```
+# Edit POSTGRES_PASSWORD and the matching DATABASE_URL password in .env.
 
-If the password contains reserved URL characters, URL-encode it in
-`DATABASE_URL`.
-
-`INVOICE_STORAGE_PATH` selects the private directory where validated invoice
-PDFs are stored. The default `storage` location resolves relative to the
-working directory for host-side runs; the Compose `api` service overrides it
-with an absolute path on the `invoice_uploads` named volume. The directory is
-never served by static routes or exposed in API responses.
-
-The digital-text extraction baseline is configured with `MAX_INVOICE_PAGES=50`
-and `MIN_EXTRACTED_TEXT_CHARS=50`. A PDF with enough non-whitespace text is
-classified as `text_extracted`; insufficient digital text is classified as
-`needs_ocr` for a later OCR task. No OCR is performed by this PDF text-layer
-stage.
-
-Structured extraction is configured for Groq with
-`GROQ_MODEL=openai/gpt-oss-120b`, prompt version `invoice-extraction-v1`, and
-schema version `invoice-schema-v1`. `GROQ_API_KEY` is server-side only and must
-never be placed in React or committed to Git. Requests use non-streaming strict
-JSON Schema output with temperature 0. Invoice text is passed as untrusted
-document data, separate from the system prompt.
-
-The structured-extraction input limit is `MAX_LLM_INPUT_CHARS=20000`; oversized
-text is rejected and persisted as `llm_input_too_large` rather than truncated.
-Transient provider failures retry at most `LLM_MAX_RETRIES=2` times with
-exponential backoff. Successful results are idempotent for the same text
-extraction, provider, model, prompt version, and schema version. Missing values
-remain `null`. The schema covers vendor identity, invoice number/dates, purchase
-order, currency, subtotal/discount/tax/shipping/total, line items, and a small
-controlled warning-code list.
-
-Successful structured extractions are then checked by the deterministic
-Business Validation Engine (ruleset `invoice-validation-v1`; see
-`docs/business-validation-v1.md`). Validation is triggered explicitly through
-the validate endpoint, reads only the persisted structured data, and stores its
-run and findings separately; it never changes the extracted values.
-
-## Run locally with Docker
-
-```powershell
 docker compose up --build -d
 docker compose ps
-```
+Invoke-WebRequest http://localhost:18000/api/v1/health
+Invoke-WebRequest http://localhost:18000/api/v1/ready
+~~~
 
-Open the frontend at <http://localhost:5173>. The API is available at
-<http://localhost:8000>, and interactive API documentation is at
-<http://localhost:8000/docs>.
+Open the review UI at http://localhost:5173, API documentation at
+http://localhost:18000/docs, and n8n at http://localhost:5678 when needed.
+The browser-visible frontend setting is VITE_API_BASE_URL=http://localhost:18000;
+the internal Compose API hostname is http://api:8000 and must not be used by
+the browser.
 
-Stop the services with:
+Stop the local stack without deleting data:
 
-```powershell
+~~~powershell
 docker compose down
-```
+~~~
 
-### Local n8n automation
+Use docker compose down -v only when intentionally resetting local database,
+invoice-storage, and n8n data volumes.
 
-The optional n8n integration is disabled by default. Set `N8N_ENABLED=true`,
-provide `N8N_WEBHOOK_SECRET`, and start the stack with `docker compose up -d`.
-n8n is available at <http://localhost:5678>; complete its first-run owner setup,
-then import the three JSON workflows from `n8n/workflows/`. FastAPI sends
-post-commit events to n8n over the Compose network at `http://n8n:5678` and n8n
-queries the review API at `http://api:8000`. n8n never receives database
-credentials and never accesses PostgreSQL directly.
+### Optional n8n setup
 
-Configure an n8n Header Auth credential named `InvoiceFlow Webhook Secret` for
-the two webhook workflows, using header `X-InvoiceFlow-Webhook-Secret` and the
-same local value as `N8N_WEBHOOK_SECRET`; exported workflow JSON intentionally
-contains no credential or secret values.
+Set N8N_ENABLED=true and a local N8N_WEBHOOK_SECRET in .env, start the stack,
+complete n8n's local owner setup, and import the three JSON workflows in
+n8n/workflows/. Configure an n8n Header Auth credential with header
+X-InvoiceFlow-Webhook-Secret. Exported workflows contain no credentials or
+secret values. FastAPI commits workflow state before attempting delivery;
+delivery is best effort and there is currently no transactional outbox.
 
-The Review Required and Review Resolution workflows use n8n execution output
-as the local demonstration sink. The Aging Review Monitor runs every 15 minutes
-and filters open, current review cases using `AGING_REVIEW_THRESHOLD_MINUTES`.
-Automation delivery is best effort: business state is committed first, and a
-delivery failure is logged without changing the API response. Persistent retry
-and an outbox are future production enhancements.
+The live harness is dry-run by default. The previously verified live procedure
+is documented in docs/milestones/7c-quality-gates.md and docs/demo.md. Do not
+rerun it merely to record this demo.
 
-### Live backend-to-n8n verification
+## Development checks
 
-The deterministic harness is dry-run by default. From the repository root:
+Backend setup and checks from the repository root:
 
-```powershell
-Set-Location backend
-..\.venv\Scripts\python.exe -m app.scripts.live_e2e
-..\.venv\Scripts\python.exe -m app.scripts.live_e2e --execute --output ..\.runtime\live-e2e\evidence.json
-```
-
-The first command performs no writes or webhook calls. The explicit
-`--execute` command creates uniquely identified synthetic invoices through the
-existing validation and workflow services, exercises Review Required,
-ACCEPT_EXCEPTION, REJECT, and idempotent replay, then writes redacted evidence.
-It never deletes records, resets migrations, truncates tables, or calls Groq.
-After execution, open n8n **Executions** and match each evidence `event_id` to
-the corresponding webhook execution payload. An HTTP 200 alone is only
-`WEBHOOK_ACCEPTED`, not proof of `N8N_EXECUTION_VERIFIED`.
-
-The PostgreSQL data remains in the named `postgres_data` volume. Remove it only
-when intentionally resetting local database state:
-
-```powershell
-docker compose down -v
-```
-
-## Backend checks
-
-Create a virtual environment and install the backend with development tools:
-
-```powershell
+~~~powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
-python -m pip install -e ".\backend[dev]"
-```
-
-Run tests, lint, and type checks:
-
-```powershell
-python -m pytest backend
+python -m pip install -e ".\backend[dev,evaluation]"
+python -m pytest -q
 python -m ruff check backend
 python -m ruff format --check backend
 pyright backend
-```
+~~~
 
-The backend test configuration intentionally uses `pythonpath = [".", ".."]`.
-The first entry resolves the backend `app` package; the second resolves the
-repository-level `evaluation` package and shared root test helpers when the
-backend suite is run from `backend/`. This keeps root and backend test commands
-reproducible without duplicating those packages.
+The full command includes both backend tests and the root-level evaluation
+tests. The default tests use fake providers and isolated SQLite fixtures. They
+do not call Groq, n8n, or customer services. PostgreSQL integration tests are
+environment-dependent and remain skipped unless TEST_DATABASE_URL is provided
+explicitly.
 
-The default test suite uses a fake provider and does not call Groq. An optional
-synthetic live smoke test can be run once, only when explicitly enabled:
+Frontend checks:
 
-```powershell
-$env:RUN_LIVE_LLM_TESTS = "1"
-$env:GROQ_API_KEY = "<your-local-key>"
-python -m pytest backend/tests/test_live_groq.py -m integration
-```
-
-Never use confidential invoice text for this test.
-
-The PostgreSQL readiness integration test is skipped when `DATABASE_URL` is not
-available to the test process. The standard Compose file keeps PostgreSQL on
-the internal Compose network, so host-side integration tests require either an
-existing local PostgreSQL instance or a temporary local port mapping. With the
-database mapped to host port `15432`, use:
-
-```powershell
-$env:TEST_DATABASE_URL = "postgresql+psycopg://invoiceflow:<local-password>@127.0.0.1:15432/invoiceflow"
-python -m pytest backend/tests/test_ready_integration.py -m integration
-```
-
-## Frontend checks
-
-```powershell
+~~~powershell
 Set-Location frontend
-npm install
+npm ci
 npm run lint
+npm test
+npm run test:coverage
+npx playwright install chromium
+npm run test:e2e
 npm run build
-```
+npm audit --audit-level=high
+npm audit --omit=dev --audit-level=high
+~~~
 
-## API endpoints
+The browser suite uses synthetic fixtures and intercepted API routes on port
+4173; it does not touch the Docker stack.
 
-| Method | Path | Purpose |
+Infrastructure and Python security checks:
+
+~~~powershell
+Set-Location ..
+python -m pip install pip-audit==2.10.1
+docker compose config --quiet
+python -m pip_audit --local --format=columns
+~~~
+
+See docs/milestones/8b-ci-pipeline.md for the matching GitHub Actions design.
+The workflow is locally validated but has not run on GitHub until the first
+push.
+
+## API surface
+
+All application endpoints are under /api/v1.
+
+| Method | Path | Responsibility |
 | --- | --- | --- |
-| GET | `/api/v1/health` | Lightweight API liveness check |
-| GET | `/api/v1/ready` | API plus PostgreSQL readiness check; returns 503 when unavailable |
-| POST | `/api/v1/invoices/upload` | Validates and stores one PDF invoice (max 10 MB); returns 201 with stored metadata, or 409 when the same PDF content already exists |
-| GET | `/api/v1/invoices/{invoice_id}` | Returns stored invoice metadata; 404 when unknown |
-| POST | `/api/v1/invoices/{invoice_id}/extract-text` | Extracts and persists PDF digital-text metadata; does not return raw text |
-| POST | `/api/v1/invoices/{invoice_id}/extract-structured` | Extracts versioned structured invoice data through Groq; does not return raw text or prompts |
-| POST | `/api/v1/invoices/{invoice_id}/validate` | Runs the deterministic `invoice-validation-v1` ruleset against the latest successful structured extraction and persists run plus findings; idempotent (200); 404 unknown invoice, 409 without successful extraction |
-| GET | `/api/v1/invoices/{invoice_id}/validation` | Returns the persisted validation run with all findings for the canonical structured extraction; 404 when not validated, 409 without successful extraction |
+| GET | /api/v1/health | Liveness without a database query |
+| GET | /api/v1/ready | PostgreSQL readiness; returns 503 when unavailable |
+| POST | /api/v1/invoices/upload | Validate and persist one PDF |
+| GET | /api/v1/invoices/{id} | Read invoice metadata |
+| POST | /api/v1/invoices/{id}/extract-text | Persist digital text extraction metadata |
+| POST | /api/v1/invoices/{id}/extract-structured | Run configured structured extraction |
+| POST | /api/v1/invoices/{id}/validate | Persist deterministic validation |
+| GET | /api/v1/invoices/{id}/validation | Read current validation findings |
+| POST | /api/v1/invoices/{id}/workflow/route | Create/read current workflow route |
+| GET | /api/v1/invoices/{id}/workflow | Read current workflow state |
+| POST | /api/v1/invoices/{id}/workflow/review | Resolve an open review case |
+| GET | /api/v1/review-cases | List current or historical review cases |
+| GET | /api/v1/review-cases/{id} | Read review and validation context |
 
-### Business validation
+## Project structure
 
-`POST /api/v1/invoices/{invoice_id}/validate` requires a **successful
-structured extraction** for the invoice (the latest one by creation time is
-selected). If none exists, the API returns `409` with code
-`structured_extraction_required` — it never triggers PDF extraction, structured
-extraction, or Groq as a side effect of validation.
+~~~text
+backend/app/                 FastAPI routes, services, models, schemas, prompts
+backend/tests/               Backend, evaluation, integration, and safety tests
+backend/alembic/             PostgreSQL migration history
+frontend/src/                React UI, API client, unit/component tests
+frontend/e2e/                Mocked Chromium workflows
+evaluation/                  Synthetic benchmark tooling and diagnostics
+n8n/workflows/               Exported local automation workflows
+docs/                        Current architecture, demo, roadmap, milestones
+.github/workflows/ci.yml     Pre-first-push quality and security pipeline
+compose.yaml                 Local API, frontend, PostgreSQL, and n8n topology
+~~~
 
-Validation is **idempotent** per `structured_extraction_id + ruleset_version`:
-calling the endpoint again returns the already persisted run (same validation
-id, same findings) instead of creating duplicates. This is enforced by a unique
-database constraint, so concurrent requests cannot create two runs for the
-same extraction and ruleset.
+## Security posture
 
-The GET endpoint first selects the latest successful structured extraction
-(`created_at DESC`, then extraction ID DESC) and returns only the validation for
-that exact extraction and current ruleset. If a newer successful extraction
-exists but has not been validated, it returns `404 validation_not_found`; it
-does not fall back to an older validation. Historical validation rows remain
-stored for audit purposes.
+- .env and other local environment files are ignored; .env.example has
+  placeholders only. No provider key or webhook secret belongs in React,
+  workflow exports, or Git.
+- Accepted PDFs live in a private Docker named volume and are not served as
+  static frontend files.
+- Groq is a server-side provider boundary. Invoice text is passed as document
+  data, not as executable instructions.
+- n8n receives authenticated webhook requests and never accesses PostgreSQL
+  directly.
+- Dependency audits run for local Python dependencies, the API runtime image,
+  and both full and production-only npm trees.
+- The local frontend is bound to loopback by Compose. This stack does not yet
+  provide HTTPS, user authentication, authorization, or production monitoring.
 
-The persisted decision (`final_decision`) is one of `PASS`, `WARNING`,
-`REVIEW_REQUIRED`, or `BLOCKED`. Decision semantics are preserved exactly as
-defined by the engine: **`WARNING` does not mean human review is required** —
-for example, summary-tax invoices legitimately produce a `WARNING` because tax
-consistency (`FIN004`) is not evaluable without line-item taxes. Only
-`REVIEW_REQUIRED` represents a result that needs human review, and `BLOCKED`
-remains reserved for the blocking conditions defined by the engine.
+## Latest verified local evidence
 
-Validation is deterministic, performs **no LLM/provider calls**, and never
-modifies the structured extraction it validates; every rule result is stored
-as a separate finding row (rule id/name, status `PASS`/`FAIL`/`NOT_EVALUABLE`,
-severity, message, actual/expected/difference values, affected fields, and
-rule metadata) and returned by both endpoints.
+The latest local evidence recorded in the milestone reports is:
 
-Validation rows currently use cascading foreign keys from invoices and
-structured extractions. If invoice deletion is introduced in a later task,
-those cascades will also delete validation audit history and must be reviewed
-before adding that feature.
+- Backend and evaluation suite: 260 passed, 14 skipped, 7 warnings in the
+  current release-candidate run.
+- Frontend: 10 Vitest tests passed; 4 Chromium Playwright tests passed.
+- Frontend coverage: statements 69.23%, branches 69.23%, functions 60.34%,
+  lines 88.00%.
+- Ruff, Pyright, ESLint, TypeScript/Vite build, npm audits, Python audits, and
+  Compose validation: PASS.
+- Milestone 7B n8n workflow: live-verified previously; the current CI workflow
+  has not yet executed on GitHub.
 
-Duplicate prevention is content-based: the SHA-256 digest of the uploaded
-PDF is unique at the database level, so uploading identical bytes again
-returns a 409 conflict with the existing invoice id and stores no second
-file. Different PDFs may freely reuse the same original filename.
+These are local development results, not a claim of production certification
+or remote CI success. Detailed evidence remains in
+docs/milestones/7c-quality-gates.md, 8a-frontend-testing.md, and
+8b-ci-pipeline.md.
 
-Storage strategy: accepted PDFs are written to a private staging directory
-next to `INVOICE_STORAGE_PATH`, then atomically renamed to
-`<invoice_uuid>.pdf` inside the same transaction window in which the invoice
-row is inserted. If anything fails before the commit, the transaction rolls
-back and both the staged and the moved file are removed, so a rejected or
-failed intake leaves neither a duplicate record nor an orphan file.
-The health response is:
+## Known limitations
 
-```json
-{
-  "status": "ok",
-  "service": "invoiceflow-api"
-}
-```
+- n8n delivery is post-commit best effort; there is no durable transactional
+  outbox or persistent retry queue.
+- The Docker topology is local-development focused and has no HTTPS, auth,
+  production monitoring, or deployment configuration.
+- Playwright currently targets Chromium only.
+- OCR is intentionally not implemented; PDFs without adequate digital text are
+  classified for future OCR work.
+- The current frontend is a review workspace, not a complete invoice-upload
+  product.
+- AI extraction evaluation remains a synthetic/offline engineering tool rather
+  than a claim of measured production accuracy.
 
-## Troubleshooting
+## Roadmap
 
-- If Compose reports missing variables, confirm that `.env` exists in the
-  repository root and contains all values from `.env.example`.
-- If port 5173 or 8000 is occupied, stop the conflicting process or change the
-  host-side port mapping in `compose.yaml`.
-- If `/api/v1/ready` returns 503, inspect `docker compose logs db api` and wait
-  for the PostgreSQL health check to pass.
-- If the frontend says the backend is unavailable, verify that the browser can
-  reach <http://localhost:8000/api/v1/health> and that `VITE_API_BASE_URL` is
-  the browser-visible API URL, not the internal Compose hostname.
+The post-release direction is InvoiceFlow AI → Intelligent Invoice Data
+Platform, with Data Engineering first: analytics foundations and quality, then
+BI, AI extraction evaluation, duplicate/anomaly detection, MLOps, and only
+later predictive intelligence when suitable historical data exists. See
+docs/roadmap.md.
 
-## Current limitations
+## Portfolio walkthrough
 
-This release includes PDF upload intake with private storage, PostgreSQL
-persistence, SHA-256 duplicate prevention, deterministic pypdf text-layer
-extraction, Groq-backed structured extraction with application format
-validation, and deterministic business validation with persisted runs and
-findings (`invoice-validation-v1`). It deliberately does not include OCR, PDF
-download streaming, authentication, authorization, worker processing, a human
-review queue, approval actions, or n8n integration. Those features require
-later implementation tasks described in the project documents.
+The concise 3–5 minute demo script is in docs/demo.md. It uses synthetic,
+mocked frontend data and previously verified n8n evidence; it does not require
+live provider calls or data mutation.
+
+Synthetic portfolio captures are available in
+[docs/assets](docs/assets): [review queue](docs/assets/review-queue.png) and
+[review detail](docs/assets/review-detail.png).
+
+## License
+
+This project is released under the MIT License. See [LICENSE](LICENSE).

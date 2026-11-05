@@ -1,0 +1,205 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: '3.12.7'
+  NODE_VERSION: '20.20.2'
+
+jobs:
+  backend-quality:
+    name: Backend quality
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip==26.2.2
+          python -m pip install -e "backend[dev,evaluation]"
+
+      - name: Run backend tests
+        run: python -m pytest -q
+
+      - name: Ruff lint
+        run: python -m ruff check backend
+
+      - name: Ruff format check
+        run: python -m ruff format --check backend
+
+      - name: Backend Pyright
+        run: python -m pyright backend
+
+      - name: Evaluation Pyright
+        run: python -m pyright
+
+  frontend-quality:
+    name: Frontend quality
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Run ESLint
+        run: npm run lint
+
+      - name: Run Vitest tests
+        run: npm test
+
+      - name: Run Vitest coverage
+        run: npm run test:coverage
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Upload coverage report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-coverage
+          path: frontend/coverage
+          if-no-files-found: error
+          retention-days: 7
+
+  browser-e2e:
+    name: Browser E2E
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Install Chromium and Linux dependencies
+        run: npx playwright install --with-deps chromium
+
+      - name: Run Playwright Chromium suite
+        run: npm run test:e2e
+
+      - name: Upload Playwright diagnostics
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-diagnostics
+          path: |
+            frontend/test-results
+            frontend/playwright-report
+          if-no-files-found: ignore
+          retention-days: 7
+
+  security-audit:
+    name: Dependency security audit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+
+      - name: Install Python dependency sets and pip-audit
+        run: |
+          python -m pip install --upgrade pip==26.2.2
+          python -m pip install -e "backend[dev,evaluation]"
+          python -m pip install pip-audit==2.10.1
+
+      - name: Audit local Python development/evaluation environment
+        run: python -m pip_audit --local --format=columns
+
+      - name: Build API runtime image for audit
+        run: docker build --tag invoiceflow-api-ci ./backend
+
+      - name: Audit resolved API runtime image
+        run: >-
+          docker run --rm invoiceflow-api-ci sh -c
+          "python -m pip install --no-cache-dir pip-audit==2.10.1
+          && pip-audit --local --format=columns"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Audit complete frontend dependency tree
+        working-directory: frontend
+        run: npm audit --audit-level=high
+
+      - name: Audit frontend production dependencies
+        working-directory: frontend
+        run: npm audit --omit=dev --audit-level=high
+
+  infrastructure-validation:
+    name: Infrastructure validation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      POSTGRES_DB: invoiceflow_ci
+      POSTGRES_USER: invoiceflow_ci
+      POSTGRES_PASSWORD: ci-only-password
+      DATABASE_URL: postgresql+psycopg://invoiceflow_ci:ci-only-password@db:5432/invoiceflow_ci
+      GROQ_API_KEY: ''
+      N8N_WEBHOOK_SECRET: ''
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Validate Docker Compose configuration
+        run: docker compose config --quiet

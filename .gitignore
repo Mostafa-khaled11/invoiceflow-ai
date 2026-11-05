@@ -19,6 +19,9 @@ htmlcov/
 node_modules/
 frontend/dist/
 frontend/.vite/
+frontend/coverage/
+frontend/playwright-report/
+frontend/test-results/
 npm-debug.log*
 
 # Local runtime data
