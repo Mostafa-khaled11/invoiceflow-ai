@@ -211,3 +211,84 @@ jobs:
 
       - name: Validate Docker Compose configuration
         run: docker compose config --quiet
+
+  postgres-integration:
+    name: PostgreSQL integration
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: invoiceflow_ci
+      POSTGRES_PASSWORD: ci-only-password
+      DATABASE_URL: postgresql+psycopg://invoiceflow_ci:ci-only-password@localhost:5432/invoiceflow_migrations
+      TEST_DATABASE_URL: postgresql+psycopg://invoiceflow_ci:ci-only-password@localhost:5432/invoiceflow_tests
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: postgres
+          POSTGRES_USER: invoiceflow_ci
+          POSTGRES_PASSWORD: ci-only-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U invoiceflow_ci -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip==26.2.2
+          python -m pip install -e "backend[dev,evaluation]"
+
+      - name: Create isolated migration and test databases
+        run: >-
+          python -c "import psycopg; connection = psycopg.connect('host=localhost
+          port=5432 dbname=postgres user=invoiceflow_ci password=ci-only-password');
+          connection.autocommit = True; connection.execute('CREATE DATABASE
+          invoiceflow_migrations'); connection.execute('CREATE DATABASE
+          invoiceflow_tests'); connection.close()"
+
+      - name: Generate deterministic evaluation dataset
+        run: python -m evaluation.generate_dataset --seed 42 --output-dir evaluation
+
+      - name: Validate evaluation dataset
+        run: >-
+          python -c "from pathlib import Path; from evaluation.validator import
+          validate_dataset; print(validate_dataset(Path('evaluation')))"
+
+      - name: Verify Alembic migrations on clean PostgreSQL
+        working-directory: backend
+        run: alembic upgrade head
+
+      - name: Verify migrated PostgreSQL schema
+        env:
+          TEST_DATABASE_URL: ${{ env.DATABASE_URL }}
+        run: python -m pytest backend/tests/test_migration_smoke.py -q
+
+      - name: Run full suite against PostgreSQL
+        run: |
+          python -m pytest --ignore=backend/tests/test_live_groq.py \
+            --ignore=backend/tests/test_migration_smoke.py \
+            --junitxml=postgres-integration.xml -q
+          python scripts/check_junit_skips.py postgres-integration.xml
+
+      - name: Upload PostgreSQL integration report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: postgres-integration-report
+          path: postgres-integration.xml
+          if-no-files-found: error
+          retention-days: 7

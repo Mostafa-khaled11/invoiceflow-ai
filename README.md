@@ -26,6 +26,7 @@ The current implementation connects:
 - Authenticated, post-commit n8n notifications for review-required and
   review-resolution events.
 - Backend, frontend, browser, security, and infrastructure quality checks.
+- Dedicated PostgreSQL integration verification with clean Alembic migrations.
 
 ## Implemented capabilities
 
@@ -177,7 +178,9 @@ See docs/milestones/8b-ci-pipeline.md for the matching GitHub Actions design.
 The initial GitHub-hosted run exposed a clean-checkout evaluation-dataset gap
 and a cross-platform storage-key issue. Milestone 8E.2 added deterministic
 dataset generation and validation before pytest plus portable storage-key
-validation; GitHub-hosted CI Run #2 subsequently passed all five jobs.
+validation; GitHub-hosted CI Run #2 subsequently passed all five original
+jobs. The release-candidate workflow also includes a dedicated PostgreSQL
+integration job.
 
 ## API surface
 
@@ -234,7 +237,7 @@ compose.yaml                 Local API, frontend, PostgreSQL, and n8n topology
 
 The latest local evidence recorded in the milestone reports is:
 
-- Backend and evaluation suite: 269 passed, 14 skipped, 7 warnings in the
+- Backend and evaluation suite: 269 passed, 15 skipped, 8 warnings in the
   latest local release-candidate run.
 - Frontend: 10 Vitest tests passed; 4 Chromium Playwright tests passed.
 - Frontend coverage: statements 69.23%, branches 69.23%, functions 60.34%,
@@ -242,8 +245,9 @@ The latest local evidence recorded in the milestone reports is:
 - Ruff, Pyright, ESLint, TypeScript/Vite build, npm audits, Python audits, and
   Compose validation: PASS.
 - Milestone 7B n8n workflow: live-verified previously. GitHub-hosted CI Run #2
-  passed all five jobs after the Milestone 8E.2 fixes. The current release
-  candidate still requires hosted verification after its new commit.
+  passed all five original jobs after the Milestone 8E.2 fixes. The current
+  release candidate adds a PostgreSQL integration job and still requires
+  hosted verification after its new commit.
 
 These are local development results, not a claim of production certification
 or remote CI success. Detailed evidence remains in
