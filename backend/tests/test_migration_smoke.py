@@ -25,6 +25,8 @@ _EXPECTED_TABLES = {
     "user_role_assignments",
     "user_sessions",
     "oidc_login_transactions",
+    "review_command_idempotency",
+    "security_audit_events",
 }
 
 
@@ -96,6 +98,35 @@ def test_alembic_head_creates_expected_postgresql_schema() -> None:
             in oidc_transaction_checks
         )
 
+        command_unique_constraints = {
+            tuple(constraint["column_names"])
+            for constraint in database_inspector.get_unique_constraints(
+                "review_command_idempotency"
+            )
+        }
+        assert {("actor_scope_key", "request_key")} <= command_unique_constraints
+        command_checks = {
+            check["name"]
+            for check in database_inspector.get_check_constraints(
+                "review_command_idempotency"
+            )
+        }
+        assert "ck_review_command_fingerprint_version" in command_checks
+
+        security_audit_checks = {
+            check["name"]
+            for check in database_inspector.get_check_constraints(
+                "security_audit_events"
+            )
+        }
+        assert "ck_security_audit_actor_type" in security_audit_checks
+
+        workflow_event_columns = {
+            column["name"]
+            for column in database_inspector.get_columns("workflow_events")
+        }
+        assert {"request_id", "correlation_id"} <= workflow_event_columns
+
         with engine.connect() as connection:
             role_names = {
                 row[0]
@@ -108,6 +139,6 @@ def test_alembic_head_creates_expected_postgresql_schema() -> None:
             revision = connection.execute(
                 text("select version_num from alembic_version")
             ).scalar_one()
-        assert revision == "f2c3d4e5f6a7"
+        assert revision == "a7b8c9d0e1f2"
     finally:
         engine.dispose()

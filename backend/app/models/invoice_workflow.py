@@ -160,6 +160,8 @@ class WorkflowEvent(Base):
     to_state: Mapped[str] = mapped_column(String(32), nullable=False)
     actor_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
     actor_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    request_id: Mapped[UUID | None] = mapped_column(Uuid(), nullable=True)
+    correlation_id: Mapped[UUID | None] = mapped_column(Uuid(), nullable=True)
     reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     meta: Mapped[dict[str, Any]] = mapped_column(
         "metadata",

@@ -1,5 +1,6 @@
 """SQLAlchemy persistence models."""
 
+from app.models.audit import ReviewCommandIdempotency, SecurityAuditEvent
 from app.models.identity import (
     ApplicationRole,
     OIDCIdentity,
@@ -54,4 +55,6 @@ __all__ = [
     "Role",
     "UserRoleAssignment",
     "UserSession",
+    "ReviewCommandIdempotency",
+    "SecurityAuditEvent",
 ]
