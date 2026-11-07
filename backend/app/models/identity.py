@@ -230,3 +230,31 @@ class UserSession(Base):
     revocation_reason: Mapped[str | None] = mapped_column(Text(), nullable=True)
 
     user: Mapped[UserAccount] = relationship(back_populates="sessions")
+
+
+class OIDCLoginTransaction(Base):
+    """Short-lived server record preventing OIDC state and callback replay."""
+
+    __tablename__ = "oidc_login_transactions"
+    __table_args__ = (
+        CheckConstraint(
+            "expires_at > created_at",
+            name="ck_oidc_login_transactions_expiry_after_creation",
+        ),
+        UniqueConstraint("state_hash", name="uq_oidc_login_transactions_state_hash"),
+        Index("ix_oidc_login_transactions_expires_at", "expires_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid(), primary_key=True, default=uuid4)
+    state_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    nonce_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    redirect_uri: Mapped[str] = mapped_column(String(2048), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    consumed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )

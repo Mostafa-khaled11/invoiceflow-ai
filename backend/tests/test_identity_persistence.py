@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import os
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
+from threading import Barrier
 from uuid import uuid4
 
 import pytest
@@ -19,7 +21,9 @@ from app.models.identity import (
 from app.models.invoice import Invoice, InvoiceStatus
 from app.services.identity_persistence import (
     assign_role,
+    consume_oidc_login_transaction,
     create_oidc_identity,
+    create_oidc_login_transaction,
     create_session,
     create_user_account,
     find_session_by_hash,
@@ -312,3 +316,44 @@ def test_identity_tables_do_not_modify_existing_invoice_records(
 
     assert persisted_invoice is not None
     assert persisted_invoice.original_filename == "identity-fixture.pdf"
+
+
+def test_oidc_transaction_is_consumed_once_under_concurrent_callbacks(
+    postgres_engine,
+) -> None:
+    """PostgreSQL row locking prevents callback replay from issuing two sessions."""
+
+    now = datetime.now(UTC)
+    state = "concurrent-state"
+    nonce = "concurrent-nonce"
+    with Session(postgres_engine) as session:
+        create_oidc_login_transaction(
+            session,
+            state=state,
+            nonce=nonce,
+            redirect_uri="https://app.example.test/callback",
+            created_at=now,
+            expires_at=now + timedelta(minutes=5),
+        )
+        session.commit()
+
+    barrier = Barrier(2)
+
+    def consume() -> bool:
+        with Session(postgres_engine) as session:
+            barrier.wait()
+            record = consume_oidc_login_transaction(
+                session,
+                state=state,
+                nonce=nonce,
+            )
+            if record is None:
+                session.rollback()
+                return False
+            session.commit()
+            return True
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(executor.map(lambda _: consume(), range(2)))
+
+    assert sorted(results) == [False, True]

@@ -1,7 +1,8 @@
 # PR-01A — Authentication, Authorization & Audit Security Architecture
 
-Status: accepted architecture; identity/session persistence implemented in
-PR-01B.1; authentication and authorization intentionally deferred.
+Status: accepted architecture; identity/session persistence and the provider-
+neutral OIDC/session boundary are implemented in PR-01B.1/PR-01B.2; route
+authorization remains intentionally deferred to PR-01C.
 
 ## Scope and verified baseline
 
@@ -9,12 +10,14 @@ InvoiceFlow AI is currently a single-company modular monolith. FastAPI owns
 workflow state and database decisions, PostgreSQL is the source of truth, React
 is the operator UI, and n8n is an optional downstream automation boundary.
 
-The repository currently has no authentication, authorization, browser session,
-or CSRF enforcement. PR-01B.1 now provides persistence for local accounts,
-provider-neutral OIDC identities, role assignments, and server-side session
-metadata, but it does not create an authenticated principal. API dependencies
-expose a request-scoped database session, storage service, settings, and
-server-side LLM provider. Existing workflow events use
+PR-01B.1 provides persistence for local accounts, provider-neutral OIDC
+identities, role assignments, and server-side session metadata. PR-01B.2 adds
+the OIDC Authorization Code + PKCE login/callback boundary, single-use
+state/nonce transaction records, browser cookie protection, CSRF/origin checks,
+and current-session/logout APIs. Existing invoice and workflow routes are not
+yet protected by RBAC; PR-01C owns that enforcement. API dependencies expose a
+request-scoped database session, storage service, settings, and server-side LLM
+provider. Existing workflow events use
 `actor_type="system"` even when the API command represents a human review
 decision; the current review request contains a client-supplied idempotency UUID
 but no authenticated actor identity.
@@ -92,6 +95,29 @@ required for unit, pull-request, or PostgreSQL integration verification.
 Provider references: [Keycloak Server Administration](https://www.keycloak.org/docs/latest/server_admin/),
 [Microsoft identity platform OIDC](https://learn.microsoft.com/en-us/entra/identity-platform/v2-protocols-oidc),
 and [Auth0 OIDC protocol](https://auth0.com/docs/authenticate/protocols/openid-connect-protocol).
+
+### Implemented PR-01B.2 authentication boundary
+
+The following routes are implemented under `/api/v1/auth`:
+
+- `GET /login` creates a short-lived encrypted callback transaction, stores
+  only state/nonce hashes in PostgreSQL, and redirects with S256 PKCE.
+- `GET /callback` consumes state and nonce once, validates discovery/JWKS,
+  signature, issuer, audience, time claims, nonce, and exact redirect URI, then
+  maps only an existing active `(issuer, subject)` identity to a session.
+- `GET /session` returns safe local account metadata and a session-bound CSRF
+  token; it never returns a bearer session token.
+- `POST /logout` requires a trusted origin and the session-bound CSRF token,
+  then revokes the server-side session.
+
+OIDC access, ID, refresh tokens and client secrets are not persisted. State,
+nonce, and the PKCE verifier are encrypted in a callback-only HttpOnly cookie;
+the database stores only SHA-256 state/nonce hashes and the consumed timestamp.
+The final guard is production startup validation: incomplete OIDC, HTTPS,
+secure-cookie, trusted-origin, or protection-complete configuration fails
+closed. Because invoice/workflow routes remain unprotected until PR-01C, this
+branch also refuses every production startup; `AUTH_PROTECTION_COMPLETE` cannot
+override that rollout gate.
 
 ### Session requirements
 
@@ -287,6 +313,7 @@ remain environment/secret-manager inputs and are never sent to React.
 - Test logs and webhook payloads do not contain cookies, tokens, provider keys,
   or raw invoice content.
 
-This document remains an architecture proposal for the authentication and
-authorization controls. PR-01B.1 provides only the documented persistence
-foundation and does not provide those runtime controls.
+PR-01B.2 provides the documented OIDC/session runtime boundary, but this
+document remains the authority for the not-yet-implemented authorization,
+company-scope, actor propagation, rate-limiting, proxy, and production rollout
+controls.
