@@ -38,6 +38,26 @@ class Settings(BaseSettings):
     n8n_webhook_secret: str | None = None
     n8n_timeout_seconds: float = Field(default=5.0, gt=0)
     aging_review_threshold_minutes: int = Field(default=60, ge=1)
+    oidc_enabled: bool = False
+    oidc_issuer: str | None = None
+    oidc_client_id: str | None = None
+    oidc_client_secret: str | None = None
+    oidc_redirect_uri: str | None = None
+    oidc_scopes: str = "openid profile email"
+    oidc_timeout_seconds: float = Field(default=10.0, gt=0)
+    oidc_transaction_cookie_secret: str | None = None
+    auth_csrf_secret: str | None = None
+    auth_session_cookie_name: str = "invoiceflow_session"
+    auth_transaction_cookie_name: str = "invoiceflow_oidc_transaction"
+    auth_cookie_secure: bool = False
+    auth_cookie_samesite: str = "lax"
+    auth_session_idle_minutes: int = Field(default=30, ge=1)
+    auth_session_absolute_hours: int = Field(default=8, ge=1)
+    auth_session_activity_update_seconds: int = Field(default=300, ge=0)
+    auth_state_ttl_seconds: int = Field(default=600, ge=60)
+    auth_trusted_origins: str = ""
+    auth_require_origin: bool = False
+    auth_protection_complete: bool = False
 
     @property
     def cors_origin_list(self) -> list[str]:
@@ -45,6 +65,17 @@ class Settings(BaseSettings):
 
         return [
             origin.strip() for origin in self.cors_origins.split(",") if origin.strip()
+        ]
+
+    @property
+    def trusted_origin_list(self) -> list[str]:
+        """Return explicit auth origins, falling back to configured CORS origins."""
+
+        configured = self.auth_trusted_origins or self.cors_origins
+        return [
+            origin.strip().rstrip("/")
+            for origin in configured.split(",")
+            if origin.strip()
         ]
 
 

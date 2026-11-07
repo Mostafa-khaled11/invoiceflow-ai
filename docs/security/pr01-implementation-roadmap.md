@@ -4,47 +4,43 @@ PR-01A is architecture only. The following slices are independently
 verifiable and must not be started without approval for the corresponding
 implementation work.
 
-## PR-01B.1 — OIDC adapter and session foundation
+## PR-01B.1 — Identity and session persistence foundation
 
 Dependencies: approved provider tenant/issuer, callback URLs, secret-management
 plan, and the fake OIDC test boundary. Microsoft Entra ID is the selected
 production target; no tenant is configured by PR-01A.
 
-Likely components:
+Implemented in the merged PR-01B.1 work: additive PostgreSQL account, identity,
+role, and opaque session persistence with migration smoke coverage. It does not
+authenticate requests or enforce authorization.
 
-- `backend/app/core/config.py`
-- auth/session service and dependencies
-- PostgreSQL account/session models and Alembic migration
-- login/callback/logout/current-user endpoints
-- frontend auth bootstrap and login/logout handling
+## PR-01B.2 — OIDC authentication and session lifecycle
 
-Design: OIDC Authorization Code + PKCE, verified issuer/audience/nonce/state,
-opaque hashed PostgreSQL sessions, secure cookies, rotation, expiry, logout,
-disable revocation, CSRF, trusted origins, and production fail-closed settings.
+Dependencies: PR-01B.1 persistence, approved provider tenant/issuer, callback
+URLs, secret-management plan, and the fake OIDC test boundary.
 
-Testing:
+Implemented in this branch: provider-neutral OIDC Authorization Code + PKCE,
+validated discovery/JWKS/ID-token claims, single-use state/nonce transactions,
+opaque hashed PostgreSQL sessions, secure cookies, CSRF/trusted-origin checks,
+and production fail-closed configuration. Existing invoice/workflow routes are
+not yet protected by RBAC; that remains PR-01C.
 
-- callback signature/issuer/audience/nonce/state failures;
-- cookie flags, rotation, expiry, logout, and disabled-account revocation;
-- no default account/password;
-- PostgreSQL session uniqueness and cleanup;
-- no provider or user secrets in frontend responses/logs.
+Testing includes deterministic mocked discovery/token/JWKS responses, invalid
+signature/issuer/audience/nonce/expiry cases, state replay and mismatch,
+pending/unknown accounts, session rotation/revocation, cookie flags, CSRF, and
+no-token persistence.
 
-Acceptance: unauthenticated protected API calls return 401; health policy is
-documented; test principals cannot activate in production.
+Acceptance for this slice: the auth boundary can create and revoke a local
+session only for an approved active `(issuer, subject)` identity, and no raw
+OIDC or session token is returned or persisted. Hosted CI remains required
+before calling the slice release-ready. Production startup remains blocked
+until PR-01C adds and verifies route authorization; the configuration flag does
+not bypass that gate.
 
-Rollback: disable new login routes only through an explicit deployment rollback
-while preserving account/session migration compatibility; never silently open
-protected endpoints.
+Rollback: disable OIDC login through deployment configuration while preserving
+the additive identity/session schema; never silently open protected routes.
 
-## PR-01B.2 — Identity mapping and account lifecycle
-
-Dependencies: PR-01B.1 principal resolution and the approved bootstrap
-procedure.
-
-Likely components: local user and OIDC-identity models, role assignment tables,
-provisioning/admin service, account-status checks, session revocation hooks,
-and additive Alembic migrations.
+## PR-01B.2 follow-up — Controlled account lifecycle
 
 Testing:
 
@@ -65,7 +61,7 @@ anonymous access to sensitive routes.
 
 ## PR-01C — Backend RBAC and service authorization
 
-Dependencies: PR-01B.1 principal/session context, PR-01B.2 account lifecycle,
+Dependencies: PR-01B.2 principal/session context and approved account bootstrap,
 and approved role matrix.
 
 Likely components: authorization dependencies, permission registry, invoice and

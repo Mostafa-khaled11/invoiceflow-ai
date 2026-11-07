@@ -5,12 +5,15 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1.router import router as api_v1_router
 from app.core.config import Settings, get_settings
+from app.services.authentication import validate_auth_configuration
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     """Create the FastAPI application with injectable settings for tests."""
 
     resolved_settings = settings or get_settings()
+    if resolved_settings.environment.lower() in {"production", "prod"}:
+        validate_auth_configuration(resolved_settings)
     application = FastAPI(
         title="InvoiceFlow AI API",
         version="0.1.0",

@@ -24,6 +24,7 @@ _EXPECTED_TABLES = {
     "roles",
     "user_role_assignments",
     "user_sessions",
+    "oidc_login_transactions",
 }
 
 
@@ -77,6 +78,24 @@ def test_alembic_head_creates_expected_postgresql_schema() -> None:
             for foreign_key in session_foreign_keys
         )
 
+        oidc_transaction_unique_constraints = {
+            tuple(constraint["column_names"])
+            for constraint in database_inspector.get_unique_constraints(
+                "oidc_login_transactions"
+            )
+        }
+        assert {("state_hash",)} <= oidc_transaction_unique_constraints
+        oidc_transaction_checks = {
+            check["name"]
+            for check in database_inspector.get_check_constraints(
+                "oidc_login_transactions"
+            )
+        }
+        assert (
+            "ck_oidc_login_transactions_expiry_after_creation"
+            in oidc_transaction_checks
+        )
+
         with engine.connect() as connection:
             role_names = {
                 row[0]
@@ -89,6 +108,6 @@ def test_alembic_head_creates_expected_postgresql_schema() -> None:
             revision = connection.execute(
                 text("select version_num from alembic_version")
             ).scalar_one()
-        assert revision == "e1b2c3d4e5f6"
+        assert revision == "f2c3d4e5f6a7"
     finally:
         engine.dispose()

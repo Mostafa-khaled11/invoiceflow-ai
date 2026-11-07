@@ -1,12 +1,13 @@
 """Focused persistence operations for identity and session records.
 
 This module deliberately does not authenticate requests, issue browser cookies,
-or enforce application permissions. Those behaviors belong to later PR-01B
-slices. It only provides validated database operations for the new records.
+or enforce application permissions. Browser authentication uses the separate
+authentication service and this module remains the persistence boundary.
 """
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from hashlib import sha256
+from hmac import compare_digest
 from uuid import UUID
 
 from sqlalchemy import select
@@ -15,6 +16,7 @@ from sqlalchemy.orm import Session
 from app.models.identity import (
     ApplicationRole,
     OIDCIdentity,
+    OIDCLoginTransaction,
     Role,
     UserAccount,
     UserAccountStatus,
@@ -25,6 +27,14 @@ from app.models.identity import (
 
 def _now() -> datetime:
     return datetime.now(UTC)
+
+
+def _as_utc(value: datetime) -> datetime:
+    """Normalize SQLite's naive timestamp round-trip to the application clock."""
+
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
 
 
 def _account_status(value: UserAccountStatus | str) -> str:
@@ -96,6 +106,22 @@ def create_oidc_identity(
     return identity
 
 
+def find_oidc_identity(
+    session: Session,
+    *,
+    issuer: str,
+    subject: str,
+) -> OIDCIdentity | None:
+    """Resolve a local identity by the verified external identity pair."""
+
+    return session.execute(
+        select(OIDCIdentity).where(
+            OIDCIdentity.issuer == normalize_issuer(issuer),
+            OIDCIdentity.subject == subject,
+        )
+    ).scalar_one_or_none()
+
+
 def assign_role(
     session: Session,
     *,
@@ -163,6 +189,14 @@ def hash_session_token(token: str) -> str:
     return sha256(token.encode("utf-8")).hexdigest()
 
 
+def hash_opaque_value(value: str) -> str:
+    """Hash a short-lived opaque protocol value without retaining the value."""
+
+    if not value:
+        raise ValueError("Opaque value cannot be empty")
+    return sha256(value.encode("utf-8")).hexdigest()
+
+
 def _validate_token_hash(token_hash: str) -> str:
     if len(token_hash) != 64:
         raise ValueError("Session token hash must be a SHA-256 hexadecimal digest")
@@ -227,9 +261,8 @@ def is_session_active(
     current = now or _now()
     if session_record.revoked_at is not None:
         return False
-    return (
-        current < session_record.idle_expires_at
-        and current < session_record.absolute_expires_at
+    return current < _as_utc(session_record.idle_expires_at) and current < _as_utc(
+        session_record.absolute_expires_at
     )
 
 
@@ -249,3 +282,102 @@ def revoke_session(
     session_record.revocation_reason = reason
     session.flush()
     return session_record
+
+
+def touch_session(
+    session: Session,
+    session_record: UserSession,
+    *,
+    now: datetime,
+    idle_timeout: timedelta,
+    update_interval: timedelta,
+) -> bool:
+    """Advance activity and idle expiry only after the configured interval."""
+
+    if now - _as_utc(session_record.last_activity_at) < update_interval:
+        return False
+    session_record.last_activity_at = now
+    session_record.idle_expires_at = min(
+        now + idle_timeout,
+        _as_utc(session_record.absolute_expires_at),
+    )
+    session.flush()
+    return True
+
+
+def revoke_user_sessions(
+    session: Session,
+    *,
+    user_id: UUID,
+    reason: str,
+    revoked_at: datetime | None = None,
+) -> int:
+    """Revoke every session for an account during lifecycle invalidation."""
+
+    now = revoked_at or _now()
+    records = session.execute(
+        select(UserSession).where(
+            UserSession.user_id == user_id,
+            UserSession.revoked_at.is_(None),
+        )
+    ).scalars()
+    count = 0
+    for record in records:
+        record.revoked_at = now
+        record.revocation_reason = reason
+        count += 1
+    session.flush()
+    return count
+
+
+def create_oidc_login_transaction(
+    session: Session,
+    *,
+    state: str,
+    nonce: str,
+    redirect_uri: str,
+    expires_at: datetime,
+    created_at: datetime | None = None,
+) -> OIDCLoginTransaction:
+    """Persist only hashes for a single-use OIDC authorization transaction."""
+
+    created = created_at or _now()
+    if expires_at <= created:
+        raise ValueError("OIDC transaction expiry must be after creation")
+    transaction = OIDCLoginTransaction(
+        state_hash=hash_opaque_value(state),
+        nonce_hash=hash_opaque_value(nonce),
+        redirect_uri=redirect_uri,
+        created_at=created,
+        expires_at=expires_at,
+    )
+    session.add(transaction)
+    session.flush()
+    return transaction
+
+
+def consume_oidc_login_transaction(
+    session: Session,
+    *,
+    state: str,
+    nonce: str,
+    now: datetime | None = None,
+) -> OIDCLoginTransaction | None:
+    """Atomically consume a valid state/nonce transaction exactly once."""
+
+    current = now or _now()
+    transaction = session.execute(
+        select(OIDCLoginTransaction)
+        .where(OIDCLoginTransaction.state_hash == hash_opaque_value(state))
+        .with_for_update()
+    ).scalar_one_or_none()
+    if (
+        transaction is None
+        or transaction.consumed_at is not None
+        or _as_utc(transaction.expires_at) <= current
+        or not compare_digest(transaction.nonce_hash, hash_opaque_value(nonce))
+    ):
+        return None
+    transaction.consumed_at = current
+    session.flush()
+    return transaction

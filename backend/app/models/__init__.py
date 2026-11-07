@@ -3,6 +3,7 @@
 from app.models.identity import (
     ApplicationRole,
     OIDCIdentity,
+    OIDCLoginTransaction,
     Role,
     UserAccount,
     UserAccountStatus,
@@ -48,6 +49,7 @@ __all__ = [
     "UserAccount",
     "UserAccountStatus",
     "OIDCIdentity",
+    "OIDCLoginTransaction",
     "ApplicationRole",
     "Role",
     "UserRoleAssignment",

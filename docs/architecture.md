@@ -65,9 +65,10 @@ PostgreSQL stores invoice metadata, structured and text extraction records,
 validation runs and findings, workflow rows, review cases, append-only
 workflow events, and the PR-01B.1 identity persistence foundation. The latter
 contains local user accounts, provider-neutral `(issuer, subject)` OIDC identity
-mappings, the four-role catalog, revocable role assignments, and opaque session
-verifier metadata. The migration creates no users, passwords, tokens, or
-administrator. Original PDF bytes are stored in the private
+mappings, the four-role catalog, revocable role assignments, opaque session
+verifier metadata, and single-use OIDC login transaction hashes. PR-01B.2
+persists no passwords or provider tokens and creates no users or administrator.
+Original PDF bytes are stored in the private
 invoice_uploads named volume, not in PostgreSQL or the frontend image.
 
 Alembic migrations in backend/alembic/versions define schema evolution.
@@ -182,7 +183,8 @@ run, including the PostgreSQL integration job.
 Secrets are loaded from local environment configuration and ignored by Git.
 Groq keys stay in the backend process. PDF storage is private to the API volume.
 The current stack is intentionally local-development focused: it has identity
-and session persistence but no authentication endpoints, browser cookie/OIDC
-flow, authorization enforcement, HTTPS, durable outbox, production monitoring,
-or deployment manifests. PR-01B.1 does not change the public behavior of
-existing API routes.
+and session persistence plus the provider-neutral OIDC browser login/session
+boundary. Existing invoice/workflow routes are still not protected by RBAC;
+authorization enforcement, HTTPS deployment, durable outbox, production
+monitoring, and deployment manifests remain future work. PR-01B.2 adds only the
+auth boundary and does not change invoice/workflow business behavior.

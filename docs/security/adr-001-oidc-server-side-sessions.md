@@ -1,13 +1,15 @@
 # ADR-001 — OIDC Identity with Server-Side PostgreSQL Sessions
 
-Status: accepted architecture; implementation deferred to PR-01B.1.
+Status: accepted architecture; persistence implemented in PR-01B.1 and OIDC
+session lifecycle implemented in PR-01B.2. Route authorization remains PR-01C.
 
 ## Context
 
 InvoiceFlow AI currently has no authentication or authorization boundary. It is
 a single-company browser application with sensitive invoice and human-review
-data. PR-01B.1 adds persistence records for future identity and session use but
-does not make any route authenticated.
+data. PR-01B.1 adds persistence records and PR-01B.2 adds the provider-neutral
+OIDC login/callback plus server-side session lifecycle. Existing business routes
+are not yet authorization-protected; that is deliberately deferred to PR-01C.
 The system needs revocation, role changes, actor attribution, concurrency-safe
 review commands, and testable local behavior without creating a password system
 or storing browser bearer tokens.
@@ -70,6 +72,15 @@ Costs and risks:
 - Rotate session IDs after login and privilege changes.
 - Store only hashed session tokens.
 - Bind audit actor IDs to the verified local account, never request payloads.
+
+## PR-01B.2 implementation evidence
+
+The implementation uses deterministic mocked discovery, token, and JWKS
+responses in offline tests. It validates signature, issuer, audience, nonce,
+time claims, state replay, exact redirect URI, PKCE S256, approved local
+identity mapping, active-account state, secure cookie behavior, CSRF, origin,
+session expiry, and logout revocation. No live provider call is required by
+the normal suite, and no OIDC/session token is persisted or returned.
 
 ## Required implementation gates
 

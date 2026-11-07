@@ -1,6 +1,6 @@
 """FastAPI dependency wiring shared by InvoiceFlow route modules."""
 
-from collections.abc import Generator
+from collections.abc import Generator, Iterator
 
 from fastapi import Request
 from sqlalchemy.orm import Session
@@ -9,6 +9,7 @@ from app.core.config import Settings
 from app.db.session import get_db_session
 from app.services.invoice_llm import GroqInvoiceLLMProvider, InvoiceLLMProvider
 from app.services.invoice_storage import InvoiceStorage
+from app.services.oidc import OIDCClient
 
 
 def get_db(request: Request) -> Generator[Session, None, None]:
@@ -38,3 +39,13 @@ def get_invoice_llm_provider(request: Request) -> InvoiceLLMProvider:
     if settings.llm_provider != "groq":
         raise RuntimeError("Unsupported LLM provider configuration")
     return GroqInvoiceLLMProvider(settings)
+
+
+def get_oidc_client(request: Request) -> Iterator[OIDCClient]:
+    """Return the configured OIDC client; tests may override this dependency."""
+
+    client = OIDCClient(request.app.state.settings)
+    try:
+        yield client
+    finally:
+        client.close()

@@ -1,8 +1,8 @@
 # PR-01B.1 — Identity Persistence Foundation
 
-Status: implemented persistence only. Authentication, browser cookies, OIDC
-callbacks, and authorization enforcement remain disabled and are deferred to
-later PR-01B/C slices.
+Status: persistence implementation remains complete as PR-01B.1. The OIDC
+browser boundary and session lifecycle are implemented separately in PR-01B.2;
+authorization enforcement remains deferred to PR-01C.
 
 ## Implemented records
 
@@ -24,7 +24,7 @@ Alembic revision `e1b2c3d4e5f6` follows `d8f9a0b1c2d3`. It is additive and
 does not alter invoice, validation, review, workflow, or historical audit rows.
 The migration smoke test verifies the new tables, role catalog, foreign keys,
 unique issuer/subject constraint, session hash constraint, active role index,
-and latest revision.
+the single-use OIDC transaction table, and latest revision `f2c3d4e5f6a7`.
 
 Downgrade removes identity and session data and is therefore appropriate only
 for a disposable environment. It must not be used as a production rollback
@@ -34,8 +34,8 @@ controls while preserving historical records.
 
 ## Deliberate non-goals
 
-- No login, callback, logout, cookie, token issuance, or authentication API.
+- No RBAC enforcement on invoice/workflow routes; that is PR-01C.
 - No password fallback or default account.
-- No route authorization or RBAC enforcement.
+- No automatic account provisioning or automatic role grant.
 - No OIDC access, ID, refresh token, or client-secret persistence.
 - No changes to invoice, validation, workflow, review, or approval behavior.
