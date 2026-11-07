@@ -100,11 +100,11 @@ The worker calls reusable domain services from the **same Python codebase** used
 
 ## 7. Authentication and authorization
 
-**Proposed for v0.1:** two seeded demo user accounts (Operator and Approver) with securely hashed passwords, a backend-managed opaque server-side session, and an HttpOnly cookie. Cookie settings must be appropriate for local HTTP dev vs HTTPS deployment; mutating actions need CSRF/Origin protection. React only changes UI affordances; FastAPI enforces permission checks.
+**PR-01B.1 persistence foundation:** local user accounts, provider-neutral OIDC identity mappings keyed by `(issuer, subject)`, a role catalog, revocable role assignments, and opaque server-side session metadata are persisted without creating users, passwords, or authentication endpoints. The approved authentication architecture is OIDC Authorization Code + PKCE with a managed provider target and backend-managed HttpOnly sessions; browser cookies, callbacks, and authorization enforcement remain later slices. Cookie settings must be appropriate for local HTTP dev vs HTTPS deployment; mutating actions need CSRF/Origin protection. React only changes UI affordances; FastAPI enforces permission checks once PR-01C is implemented.
 
 **n8n v1.0:** separate service credential/limited service identity for the ingestion API, carried over private local Docker networking or secure HTTPS if remote. Never reuse an interactive user password, call database tables directly from n8n, or put provider secrets in React.
 
-Detailed token/cookie/session endpoints, expiration, role matrix and CSRF strategy are Task 1.3.
+Detailed token/cookie/session endpoints, expiration, role matrix and CSRF strategy remain PR-01B.1 through PR-01E implementation work.
 
 ## 8. State model and review flow
 

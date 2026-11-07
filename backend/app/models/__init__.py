@@ -1,5 +1,14 @@
 """SQLAlchemy persistence models."""
 
+from app.models.identity import (
+    ApplicationRole,
+    OIDCIdentity,
+    Role,
+    UserAccount,
+    UserAccountStatus,
+    UserRoleAssignment,
+    UserSession,
+)
 from app.models.invoice import Invoice, InvoiceStatus
 from app.models.invoice_structured_extraction import (
     InvoiceStructuredExtraction,
@@ -36,4 +45,11 @@ __all__ = [
     "ReviewCase",
     "ReviewCaseStatus",
     "ReviewResolution",
+    "UserAccount",
+    "UserAccountStatus",
+    "OIDCIdentity",
+    "ApplicationRole",
+    "Role",
+    "UserRoleAssignment",
+    "UserSession",
 ]
