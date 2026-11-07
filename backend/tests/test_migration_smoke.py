@@ -19,6 +19,11 @@ _EXPECTED_TABLES = {
     "invoice_workflows",
     "workflow_events",
     "review_cases",
+    "user_accounts",
+    "oidc_identities",
+    "roles",
+    "user_role_assignments",
+    "user_sessions",
 }
 
 
@@ -46,10 +51,44 @@ def test_alembic_head_creates_expected_postgresql_schema() -> None:
         }
         assert "ck_workflow_events_event_type" in workflow_event_checks
 
+        identity_unique_constraints = {
+            tuple(constraint["column_names"])
+            for constraint in database_inspector.get_unique_constraints(
+                "oidc_identities"
+            )
+        }
+        assert {("issuer", "subject")} <= identity_unique_constraints
+
+        session_unique_constraints = {
+            tuple(constraint["column_names"])
+            for constraint in database_inspector.get_unique_constraints("user_sessions")
+        }
+        assert {("token_hash",)} <= session_unique_constraints
+
+        role_assignment_indexes = {
+            index["name"]
+            for index in database_inspector.get_indexes("user_role_assignments")
+        }
+        assert "uq_user_role_assignments_active" in role_assignment_indexes
+
+        session_foreign_keys = database_inspector.get_foreign_keys("user_sessions")
+        assert any(
+            foreign_key["referred_table"] == "user_accounts"
+            for foreign_key in session_foreign_keys
+        )
+
         with engine.connect() as connection:
+            role_names = {
+                row[0]
+                for row in connection.execute(
+                    text("select name from roles order by name")
+                )
+            }
+            assert role_names == {"Admin", "Approver", "Operator", "Reviewer"}
+
             revision = connection.execute(
                 text("select version_num from alembic_version")
             ).scalar_one()
-        assert revision == "d8f9a0b1c2d3"
+        assert revision == "e1b2c3d4e5f6"
     finally:
         engine.dispose()
