@@ -13,7 +13,8 @@ the v0.1.0 publication can be reviewed without changing product behavior.
 - The first GitHub Actions run exposed a backend dataset-bootstrap and
   cross-platform storage-key failure; GitHub-hosted CI Run #2 confirmed the
   Milestone 8E.2 fix.
-- The current release-candidate commit must pass the five hosted CI jobs.
+- The current release-candidate commit must pass all six hosted CI jobs,
+  including PostgreSQL integration and clean-database migration verification.
 - GitHub Actions references are pinned to verified full commit SHAs with
   readable release comments.
 

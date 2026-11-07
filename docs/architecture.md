@@ -164,12 +164,14 @@ flowchart LR
     Event --> I[infrastructure-validation]
 ~~~
 
-.github/workflows/ci.yml contains these five jobs. Local YAML parsing and
+.github/workflows/ci.yml contains six jobs, including a dedicated PostgreSQL
+integration job. Local YAML parsing and
 command-equivalent checks pass; actionlint is not installed in the current
 Windows environment. The initial hosted run
 exposed a clean-checkout benchmark bootstrap gap and a cross-platform
 storage-key issue; Milestone 8E.2 fixed both and hosted CI Run #2 passed all
-five jobs. Release-candidate commits still require their own hosted run.
+five original jobs. Release-candidate commits still require their own hosted
+run, including the PostgreSQL integration job.
 
 ## Trust and release boundaries
 
