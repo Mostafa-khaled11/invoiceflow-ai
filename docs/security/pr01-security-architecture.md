@@ -1,6 +1,7 @@
 # PR-01A — Authentication, Authorization & Audit Security Architecture
 
-Status: proposed architecture; implementation intentionally deferred.
+Status: accepted architecture; identity/session persistence implemented in
+PR-01B.1; authentication and authorization intentionally deferred.
 
 ## Scope and verified baseline
 
@@ -8,10 +9,12 @@ InvoiceFlow AI is currently a single-company modular monolith. FastAPI owns
 workflow state and database decisions, PostgreSQL is the source of truth, React
 is the operator UI, and n8n is an optional downstream automation boundary.
 
-The repository currently has no authentication, authorization, user identity,
-session, CSRF, or account lifecycle implementation. API dependencies expose a
-request-scoped database session, storage service, settings, and server-side LLM
-provider, but no authenticated principal. Existing workflow events use
+The repository currently has no authentication, authorization, browser session,
+or CSRF enforcement. PR-01B.1 now provides persistence for local accounts,
+provider-neutral OIDC identities, role assignments, and server-side session
+metadata, but it does not create an authenticated principal. API dependencies
+expose a request-scoped database session, storage service, settings, and
+server-side LLM provider. Existing workflow events use
 `actor_type="system"` even when the API command represents a human review
 decision; the current review request contains a client-supplied idempotency UUID
 but no authenticated actor identity.
@@ -120,11 +123,11 @@ not authorize a migration in PR-01A:
 
 | Record | Required fields and constraints | Security purpose |
 | --- | --- | --- |
-| `users` | Local immutable UUID, status (`ACTIVE`, `DISABLED`, `PENDING`), display name, timestamps, last-login timestamp | Stable local principal independent of email or provider subject |
+| `user_accounts` | Local immutable UUID, status (`ACTIVE`, `DISABLED`, `PENDING`), optional email/display name, created/updated timestamps | Stable local principal independent of email or provider subject |
 | `oidc_identities` | `user_id`, exact normalized issuer, exact OIDC `sub`, timestamps, last-seen profile fields; unique `(issuer, subject)` | Prevents account collision and makes email changes safe |
-| `roles` / `user_roles` | Explicit role identifiers, unique assignment, grant/revoke timestamps and actor metadata | Deny-by-default authorization and auditable role changes |
-| `sessions` | User FK, hash of opaque token, created/last-seen/idle/absolute expiry, revoked-at/reason, optional authentication context; unique token hash | Server-side revocation without browser bearer tokens |
-| `review_command_idempotency` | Request key, authenticated user/service actor, command fingerprint, result/event reference, timestamps; unique actor/key policy | Prevents cross-actor reuse and decision substitution |
+| `roles` / `user_role_assignments` | Explicit role identifiers, unique active assignment, grant/revoke timestamps and future actor metadata | Deny-by-default authorization and auditable role changes |
+| `user_sessions` | User FK, SHA-256 verifier hash, created/last-activity/idle/absolute expiry, revoked-at/reason; unique token hash | Server-side revocation without browser bearer tokens |
+| `review_command_idempotency` (future) | Request key, authenticated user/service actor, command fingerprint, result/event reference, timestamps; unique actor/key policy | Prevents cross-actor reuse and decision substitution |
 
 The immutable security key is `(issuer, subject)`, never email. Email is a
 display/profile attribute and may change or be absent; changes must not merge
@@ -135,6 +138,11 @@ privilege automatically. Disablement revokes sessions and blocks new sessions.
 The first administrator is bootstrapped through a one-time deployment procedure
 or pre-approved issuer/subject allowlist, recorded as an operator action, then
 removed or locked down.
+
+PR-01B.1 implements the account, identity, role, and session records without
+actor columns because no authenticated actor exists yet. PR-01D must add actor
+attribution for role changes and authenticated audit commands additively; it
+must not fabricate historical grant or revocation actors.
 
 ### Account lifecycle
 
@@ -279,5 +287,6 @@ remain environment/secret-manager inputs and are never sent to React.
 - Test logs and webhook payloads do not contain cookies, tokens, provider keys,
   or raw invoice content.
 
-This document is an architecture proposal, not a claim that the application
-currently provides these controls.
+This document remains an architecture proposal for the authentication and
+authorization controls. PR-01B.1 provides only the documented persistence
+foundation and does not provide those runtime controls.

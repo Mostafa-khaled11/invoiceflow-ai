@@ -4,8 +4,10 @@ Status: accepted architecture; implementation deferred to PR-01B.1.
 
 ## Context
 
-InvoiceFlow AI currently has no user identity or authorization boundary. It is a
-single-company browser application with sensitive invoice and human-review data.
+InvoiceFlow AI currently has no authentication or authorization boundary. It is
+a single-company browser application with sensitive invoice and human-review
+data. PR-01B.1 adds persistence records for future identity and session use but
+does not make any route authenticated.
 The system needs revocation, role changes, actor attribution, concurrency-safe
 review commands, and testable local behavior without creating a password system
 or storing browser bearer tokens.
