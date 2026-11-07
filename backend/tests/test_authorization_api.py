@@ -112,7 +112,8 @@ def test_every_sensitive_registered_route_has_a_permission_dependency() -> None:
         if hasattr(router, "original_router"):
             context = getattr(router, "include_context", None)
             prefix += getattr(context, "prefix", "") if context else ""
-            router = router.original_router
+            original_router_attribute = "original_router"
+            router = getattr(router, original_router_attribute)
         for route in getattr(router, "routes", []):
             if hasattr(route, "original_router") or hasattr(route, "routes"):
                 yield from walk(route, prefix + getattr(route, "prefix", ""))
