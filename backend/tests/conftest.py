@@ -7,15 +7,25 @@ Both variants create the schema per test so no repository fixtures persist.
 """
 
 import os
+import secrets
 from collections.abc import Iterator
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
 from app.core.config import Settings
 from app.db.base import Base
 from app.main import create_app
+from app.models.identity import ApplicationRole, Role, UserAccountStatus
+from app.services.identity_persistence import (
+    assign_role,
+    create_session,
+    create_user_account,
+    hash_session_token,
+)
 from fastapi.testclient import TestClient
 from sqlalchemy import Engine, create_engine
+from sqlalchemy.orm import Session
 
 
 @pytest.fixture
@@ -69,7 +79,57 @@ def app_settings(
 
 
 @pytest.fixture
-def client(app_settings: Settings) -> TestClient:
-    """Return a test client for the fully wired application."""
+def authenticated_client(
+    app_settings: Settings, engine: Engine
+) -> Iterator[TestClient]:
+    """Return a client with an explicitly seeded synthetic Reviewer identity."""
 
-    return TestClient(create_app(app_settings))
+    raw_token = secrets.token_urlsafe(32)
+    now = datetime.now(UTC)
+    with Session(engine) as session:
+        account = create_user_account(
+            session,
+            email="reviewer@example.test",
+            display_name="Synthetic Reviewer",
+            status=UserAccountStatus.ACTIVE,
+        )
+        role = Role(
+            name=ApplicationRole.REVIEWER.value,
+            description="Synthetic test reviewer",
+        )
+        session.add(role)
+        session.flush()
+        assign_role(
+            session,
+            user_id=account.id,
+            role=ApplicationRole.REVIEWER,
+        )
+        create_session(
+            session,
+            user_id=account.id,
+            token_hash=hash_session_token(raw_token),
+            created_at=now,
+            last_activity_at=now,
+            idle_expires_at=now + timedelta(hours=1),
+            absolute_expires_at=now + timedelta(hours=8),
+        )
+        session.commit()
+
+    with TestClient(create_app(app_settings)) as test_client:
+        test_client.cookies.set(app_settings.auth_session_cookie_name, raw_token)
+        yield test_client
+
+
+@pytest.fixture
+def client(authenticated_client: TestClient) -> TestClient:
+    """Backward-compatible alias for the explicit synthetic Reviewer client."""
+
+    return authenticated_client
+
+
+@pytest.fixture
+def anonymous_client(app_settings: Settings) -> Iterator[TestClient]:
+    """Return an unauthenticated client for authorization boundary tests."""
+
+    with TestClient(create_app(app_settings)) as test_client:
+        yield test_client

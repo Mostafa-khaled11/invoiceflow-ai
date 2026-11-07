@@ -50,6 +50,9 @@ The backend is organized as a modular monolith:
   and invoice_validation.py persists every finding.
 - invoice_workflow.py routes validation decisions, writes workflow events,
   creates review cases, and resolves human decisions under the invoice lock.
+- authorization.py resolves browser sessions and the scoped n8n service
+  credential, applies the centralized role/permission matrix, and fails closed
+  before protected route handlers run.
 - review_cases.py provides current and historical operational read models.
 - services/integrations/n8n.py delivers newly-created workflow events after the
   database commit.
@@ -133,6 +136,29 @@ through the imported workflows but does not write PostgreSQL directly and does
 not decide financial validation outcomes. The aging monitor reads the review
 API. n8n is optional for core application tests and is disabled by default.
 
+The aging-review monitor calls the protected review queue with a dedicated
+Bearer token. FastAPI stores only its SHA-256 verifier in configuration; the
+raw token is injected into the n8n container at runtime. This service principal
+is queue-only and cannot read case detail, resolve reviews, or access invoice
+routes.
+
+## Authorization boundary
+
+PR-01C protects invoice, validation, workflow, and review routes with the
+central permission registry. Operator, Reviewer, Approver, and Admin are
+explicit role bundles; Approver has no PR-01 command permission and Admin has
+no approval permission. Health and readiness remain the explicit public
+deployment health exceptions, while OIDC login/session routes retain their
+authentication-boundary behavior.
+
+The current database is single-company and has no tenant or company ownership
+columns. PR-01C therefore enforces authenticated single-company scope and
+permission checks, without inventing multitenant semantics. Human review
+resolutions propagate the authenticated local account ID into the review event
+and reviewer field; deterministic routing remains a system event. Production
+startup remains fail-closed until the complete authorization, actor-audit, and
+deployment rollout gates are accepted.
+
 ## Frontend
 
 The React application is a focused operations workspace. It provides review
@@ -183,8 +209,8 @@ run, including the PostgreSQL integration job.
 Secrets are loaded from local environment configuration and ignored by Git.
 Groq keys stay in the backend process. PDF storage is private to the API volume.
 The current stack is intentionally local-development focused: it has identity
-and session persistence plus the provider-neutral OIDC browser login/session
-boundary. Existing invoice/workflow routes are still not protected by RBAC;
-authorization enforcement, HTTPS deployment, durable outbox, production
-monitoring, and deployment manifests remain future work. PR-01B.2 adds only the
-auth boundary and does not change invoice/workflow business behavior.
+and session persistence, the provider-neutral OIDC browser login/session
+boundary, and PR-01C route-level RBAC with a scoped n8n read principal.
+HTTPS deployment, durable outbox, production monitoring, complete actor audit
+coverage, and deployment manifests remain future work. Production startup is
+still blocked by the existing fail-closed authorization gate.

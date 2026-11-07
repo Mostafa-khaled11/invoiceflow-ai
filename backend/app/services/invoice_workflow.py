@@ -19,6 +19,7 @@ from app.models.invoice_workflow import (
     WorkflowEventType,
     WorkflowState,
 )
+from app.services.authorization import AuthorizationContext, Permission
 from app.services.business_validation import FinalValidationDecision
 from app.services.invoice_lock import lock_invoice_for_update
 from app.services.invoice_validation import (
@@ -296,8 +297,44 @@ def resolve_invoice_review(
     decision: ReviewResolution,
     resolution_request_id: str,
     note: str | None = None,
+    principal: AuthorizationContext | None = None,
+    actor_type: str = "system",
+    actor_id: str | None = None,
 ) -> WorkflowRoutingResult:
     """Resolve the current open review case under the invoice coordination lock."""
+
+    if principal is not None:
+        if not principal.can(Permission.REVIEW_RESOLVE):
+            raise ReviewResolutionError(
+                "authorization_required",
+                "The review actor lacks review resolution permission.",
+                403,
+            )
+        actor_type = principal.principal_type
+        actor_id = (
+            str(principal.account_id)
+            if principal.account_id is not None
+            else principal.service_name
+        )
+
+    if actor_type not in {"human", "service", "system"}:
+        raise ReviewResolutionError(
+            "invalid_actor",
+            "The review actor type is invalid.",
+            500,
+        )
+    if actor_type in {"human", "service"} and not actor_id:
+        raise ReviewResolutionError(
+            "invalid_actor",
+            "A human or service review actor must have an identifier.",
+            500,
+        )
+    if actor_type == "system" and actor_id is not None:
+        raise ReviewResolutionError(
+            "invalid_actor",
+            "System review events cannot have an actor identifier.",
+            500,
+        )
 
     locked_invoice = lock_invoice_for_update(session, invoice_id)
     if locked_invoice is None:
@@ -368,6 +405,18 @@ def resolve_invoice_review(
                     "The resolution request ID was reused with a different decision.",
                     409,
                 )
+            if review_case.reviewer_id != actor_id:
+                raise ReviewResolutionError(
+                    "resolution_request_conflict",
+                    "The resolution request ID was reused by a different actor.",
+                    409,
+                )
+            if review_case.reviewer_note != note:
+                raise ReviewResolutionError(
+                    "resolution_request_conflict",
+                    "The resolution request ID was reused with a different note.",
+                    409,
+                )
             return _routing_result(
                 workflow,
                 validation,
@@ -413,7 +462,7 @@ def resolve_invoice_review(
         review_case.status = ReviewCaseStatus.RESOLVED.value
         review_case.resolution = decision.value
         review_case.resolved_at = now
-        review_case.reviewer_id = None
+        review_case.reviewer_id = actor_id
         review_case.reviewer_note = note
         review_case.resolution_request_id = resolution_request_id
         session.add(
@@ -423,7 +472,8 @@ def resolve_invoice_review(
                 event_type=event_type.value,
                 from_state=previous_state,
                 to_state=next_state.value,
-                actor_type="system",
+                actor_type=actor_type,
+                actor_id=actor_id,
                 reason="Human review resolution",
                 meta={"resolution_request_id": resolution_request_id},
             )

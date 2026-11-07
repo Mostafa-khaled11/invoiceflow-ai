@@ -36,6 +36,8 @@ class Settings(BaseSettings):
     n8n_enabled: bool = False
     n8n_base_url: str | None = None
     n8n_webhook_secret: str | None = None
+    n8n_service_name: str = "n8n-aging-review-monitor"
+    n8n_service_token_hash: str | None = None
     n8n_timeout_seconds: float = Field(default=5.0, gt=0)
     aging_review_threshold_minutes: int = Field(default=60, ge=1)
     oidc_enabled: bool = False
