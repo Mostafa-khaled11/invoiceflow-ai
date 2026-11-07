@@ -10,7 +10,7 @@
       "position": [220, 300]
     },
     {
-      "parameters": {"method": "GET", "url": "http://api:8000/api/v1/review-cases?status=OPEN&workflow_state=NEEDS_REVIEW&include_historical=false&limit=100", "options": {}},
+      "parameters": {"method": "GET", "url": "http://api:8000/api/v1/review-cases?status=OPEN&workflow_state=NEEDS_REVIEW&include_historical=false&limit=100", "sendHeaders": true, "headerParameters": {"parameters": [{"name": "Authorization", "value": "Bearer {{$env.INVOICEFLOW_N8N_SERVICE_TOKEN}}"}]}, "options": {}},
       "id": "review-queue-request",
       "name": "Query Current Review Queue",
       "type": "n8n-nodes-base.httpRequest",

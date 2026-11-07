@@ -22,8 +22,9 @@ URLs, secret-management plan, and the fake OIDC test boundary.
 Implemented in this branch: provider-neutral OIDC Authorization Code + PKCE,
 validated discovery/JWKS/ID-token claims, single-use state/nonce transactions,
 opaque hashed PostgreSQL sessions, secure cookies, CSRF/trusted-origin checks,
-and production fail-closed configuration. Existing invoice/workflow routes are
-not yet protected by RBAC; that remains PR-01C.
+and production fail-closed configuration. PR-01C adds the route-level RBAC and
+scoped service boundary described below; production remains gated until the
+remaining rollout controls are accepted.
 
 Testing includes deterministic mocked discovery/token/JWKS responses, invalid
 signature/issuer/audience/nonce/expiry cases, state replay and mismatch,
@@ -64,9 +65,11 @@ anonymous access to sensitive routes.
 Dependencies: PR-01B.2 principal/session context and approved account bootstrap,
 and approved role matrix.
 
-Likely components: authorization dependencies, permission registry, invoice and
-review route adapters, invoice workflow/review services, list-query scope
-helpers.
+Implemented components: centralized permission registry and role matrix,
+browser-session and n8n service-principal resolution, invoice/review route
+guards, operator queue restriction, human actor propagation for review
+resolution, and runtime n8n credential wiring. The current schema is
+single-company; no artificial tenant columns were added.
 
 Testing:
 
@@ -76,8 +79,11 @@ Testing:
 - direct service-call authorization tests;
 - concurrent authorization and state-transition tests on PostgreSQL.
 
-Acceptance: deny by default; no UI-only checks; operators cannot resolve
-reviews; Admin has no implicit financial approval; Approver remains PR-02.
+Acceptance progress: deny by default at protected route boundaries; no UI-only
+checks; operators cannot route or resolve reviews; Admin has no implicit
+financial approval; Approver remains PR-02. Remaining work is full
+object/service authorization, actor/audit correlation, PostgreSQL security
+verification, and production rollout approval.
 
 Rollback: revoke permissions/configuration, not route guards; maintain a safe
 closed state if authorization configuration is unavailable.
@@ -152,3 +158,11 @@ Each slice requires full existing Pytest/Ruff/Pyright/frontend gates, migration
 verification on PostgreSQL 17, negative authorization tests, secret scanning,
 and explicit documentation of changed API contracts. No slice may add PR-02
 approval states or weaken an existing assertion.
+
+### PR-01C implementation note
+
+The checked-in n8n aging monitor now sends its scoped runtime service
+credential. The API stores only the SHA-256 verifier, and replacing or removing
+that verifier revokes the credential. The implementation remains local/test
+verified until PostgreSQL security verification, complete service-layer object
+authorization, and the production rollout gates are complete.

@@ -265,6 +265,16 @@ def test_review_api_accept_exception_completes_lifecycle(
     with Session(engine) as session:
         validation = session.execute(select(InvoiceValidation)).scalar_one()
         assert validation.final_decision == "REVIEW_REQUIRED"
+        resolution_event = (
+            session.execute(
+                select(WorkflowEvent).order_by(WorkflowEvent.sequence_number.desc())
+            )
+            .scalars()
+            .first()
+        )
+        assert resolution_event is not None
+        assert resolution_event.actor_type == "human"
+        assert resolution_event.actor_id is not None
     assert client.get(READ_URL.format(invoice_id)).json()["state"] == (
         "EXCEPTION_ACCEPTED"
     )
@@ -319,6 +329,32 @@ def test_review_api_idempotency_and_conflict(client: TestClient) -> None:
     assert conflicting_request.json()["detail"]["code"] == "resolution_request_conflict"
     assert different_request.status_code == 409
     assert different_request.json()["detail"]["code"] == "review_already_resolved"
+
+
+def test_review_api_same_key_with_different_note_conflicts(client: TestClient) -> None:
+    invoice_id = _seed_review_workflow(client)
+    request_id = str(uuid4())
+    url = f"/api/v1/invoices/{invoice_id}/workflow/review"
+    first = client.post(
+        url,
+        json={
+            "decision": "REJECT",
+            "resolution_request_id": request_id,
+            "note": "Original decision note",
+        },
+    )
+    replay = client.post(
+        url,
+        json={
+            "decision": "REJECT",
+            "resolution_request_id": request_id,
+            "note": "Substituted decision note",
+        },
+    )
+
+    assert first.status_code == 200
+    assert replay.status_code == 409
+    assert replay.json()["detail"]["code"] == "resolution_request_conflict"
 
 
 def test_review_api_missing_workflow_maps_to_not_found(client: TestClient) -> None:

@@ -1,8 +1,10 @@
 # PR-01A — Authentication, Authorization & Audit Security Architecture
 
 Status: accepted architecture; identity/session persistence and the provider-
-neutral OIDC/session boundary are implemented in PR-01B.1/PR-01B.2; route
-authorization remains intentionally deferred to PR-01C.
+neutral OIDC/session boundary are implemented in PR-01B.1/PR-01B.2. PR-01C
+adds the centralized backend route permission boundary and scoped n8n service
+principal. Production remains fail-closed until later actor-audit and
+deployment gates are complete.
 
 ## Scope and verified baseline
 
@@ -14,13 +16,13 @@ PR-01B.1 provides persistence for local accounts, provider-neutral OIDC
 identities, role assignments, and server-side session metadata. PR-01B.2 adds
 the OIDC Authorization Code + PKCE login/callback boundary, single-use
 state/nonce transaction records, browser cookie protection, CSRF/origin checks,
-and current-session/logout APIs. Existing invoice and workflow routes are not
-yet protected by RBAC; PR-01C owns that enforcement. API dependencies expose a
-request-scoped database session, storage service, settings, and server-side LLM
-provider. Existing workflow events use
-`actor_type="system"` even when the API command represents a human review
-decision; the current review request contains a client-supplied idempotency UUID
-but no authenticated actor identity.
+and current-session/logout APIs. PR-01C protects invoice, validation, workflow,
+and review routes with named permissions resolved from the current account and
+active role assignments. API dependencies expose a request-scoped database
+session, storage service, settings, and server-side LLM provider. Human review
+events now carry the authenticated local account as `actor_type="human"`;
+deterministic routing remains `actor_type="system"`. Full correlation and
+command-idempotency persistence remains PR-01D.
 
 The existing workflow states and decisions are preserved. Final approval is
 out of scope for PR-01A and belongs to PR-02.
@@ -247,21 +249,22 @@ must not roll back the committed business action.
 ## n8n integration direction
 
 Current n8n integration is outbound from FastAPI to webhook endpoints using the
-`X-InvoiceFlow-Webhook-Secret` header. The checked-in aging monitor also makes
-an unauthenticated internal `GET /api/v1/review-cases` request today, so the
-network boundary is not a substitute for a service identity. n8n does not own
+`X-InvoiceFlow-Webhook-Secret` header. The checked-in aging monitor makes an
+authenticated internal `GET /api/v1/review-cases` request using a dedicated
+runtime token whose SHA-256 verifier is stored by the API. n8n does not own
 workflow state and does not directly access PostgreSQL. Preserve that boundary.
 
-PR-01 should introduce a distinct machine identity for n8n-facing API access
-only where the workflows call protected API endpoints, with scoped permission
-such as `review:read` and no review-resolution or approval permission. Browser
+PR-01C introduces a distinct machine identity for n8n-facing API access with
+scoped `review:queue` permission and no case-detail, review-resolution, or
+approval permission. Browser
 requests use the user session cookie; n8n requests use a separate service
 credential; outbound FastAPI-to-n8n delivery continues to use its own webhook
 credential. These are three separate trust relationships and must not share
 cookies, user sessions, or Admin credentials.
 
-The n8n service identity must be non-human, uniquely named, revocable, scoped
-to the minimum read operations, and rejected with `401` when missing/invalid or
+The n8n service identity is non-human, uniquely named, revocable by replacing
+or removing its configured hash, scoped to the minimum read operations, and
+rejected with `401` when missing/invalid or
 `403` when insufficient. Secrets must be injected through deployment
 configuration, rotated by replacement, and never placed in exported workflow
 JSON. Existing webhook secret compatibility requires a staged rotation window

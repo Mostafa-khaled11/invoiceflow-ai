@@ -42,6 +42,17 @@ from app.schemas.workflows import (
     InvoiceWorkflowRouteResponse,
     WorkflowReviewCaseResponse,
 )
+from app.services.authorization import (
+    AuthorizationContext,
+    require_invoice_create,
+    require_invoice_extract,
+    require_invoice_read,
+    require_invoice_validate,
+    require_review_resolve,
+    require_validation_read,
+    require_workflow_read,
+    require_workflow_route,
+)
 from app.services.business_validation import (
     FinalValidationDecision,
     ValidationRuleStatus,
@@ -98,6 +109,7 @@ async def upload_invoice(
     file: UploadFile,
     session: Annotated[Session, Depends(get_db)],
     storage: Annotated[InvoiceStorage, Depends(get_invoice_storage)],
+    _principal: Annotated[AuthorizationContext, Depends(require_invoice_create)],
 ) -> InvoiceResponse:
     """Validate one invoice PDF upload, reject duplicates, and persist it.
 
@@ -150,6 +162,7 @@ async def upload_invoice(
 def get_invoice(
     invoice_id: UUID,
     session: Annotated[Session, Depends(get_db)],
+    _principal: Annotated[AuthorizationContext, Depends(require_invoice_read)],
 ) -> InvoiceResponse:
     """Return previously stored invoice metadata without storage paths."""
 
@@ -181,6 +194,7 @@ def extract_invoice_text(
     session: Annotated[Session, Depends(get_db)],
     storage: Annotated[InvoiceStorage, Depends(get_invoice_storage)],
     settings: Annotated[Settings, Depends(get_app_settings)],
+    _principal: Annotated[AuthorizationContext, Depends(require_invoice_extract)],
 ) -> InvoiceTextExtractionResponse:
     """Run one synchronous, idempotent digital-text extraction."""
 
@@ -270,6 +284,7 @@ def extract_invoice_structured(
     session: Annotated[Session, Depends(get_db)],
     settings: Annotated[Settings, Depends(get_app_settings)],
     provider: Annotated[InvoiceLLMProvider, Depends(get_invoice_llm_provider)],
+    _principal: Annotated[AuthorizationContext, Depends(require_invoice_extract)],
 ) -> StructuredExtractionResponse:
     """Run auditable structured extraction without returning source text."""
 
@@ -292,6 +307,7 @@ def extract_invoice_structured(
 def run_invoice_validation(
     invoice_id: UUID,
     session: Annotated[Session, Depends(get_db)],
+    _principal: Annotated[AuthorizationContext, Depends(require_invoice_validate)],
 ) -> InvoiceValidationResponse:
     """Validate the canonical structured extraction and persist the report.
 
@@ -319,6 +335,7 @@ def run_invoice_validation(
 def get_invoice_validation(
     invoice_id: UUID,
     session: Annotated[Session, Depends(get_db)],
+    _principal: Annotated[AuthorizationContext, Depends(require_validation_read)],
 ) -> InvoiceValidationResponse:
     """Return the stored validation run including every finding."""
 
@@ -342,6 +359,7 @@ def route_invoice_workflow_endpoint(
     invoice_id: UUID,
     session: Annotated[Session, Depends(get_db)],
     settings: Annotated[Settings, Depends(get_app_settings)],
+    _principal: Annotated[AuthorizationContext, Depends(require_workflow_route)],
 ) -> InvoiceWorkflowRouteResponse:
     """Create or retrieve the idempotent initial workflow for an invoice."""
 
@@ -374,6 +392,7 @@ def route_invoice_workflow_endpoint(
 def get_invoice_workflow(
     invoice_id: UUID,
     session: Annotated[Session, Depends(get_db)],
+    _principal: Annotated[AuthorizationContext, Depends(require_workflow_read)],
 ) -> InvoiceWorkflowResponse:
     """Return workflow state only when it belongs to the current validation."""
 
@@ -398,6 +417,7 @@ def resolve_invoice_review_endpoint(
     request: InvoiceReviewResolutionRequest,
     session: Annotated[Session, Depends(get_db)],
     settings: Annotated[Settings, Depends(get_app_settings)],
+    principal: Annotated[AuthorizationContext, Depends(require_review_resolve)],
 ) -> InvoiceWorkflowResponse:
     """Apply one explicit, idempotent resolution to the current review case."""
 
@@ -408,6 +428,7 @@ def resolve_invoice_review_endpoint(
             request.decision,
             str(request.resolution_request_id),
             request.note,
+            principal=principal,
         )
     except ReviewResolutionError as exc:
         raise HTTPException(

@@ -34,6 +34,8 @@ services:
       N8N_ENABLED: ${N8N_ENABLED:-false}
       N8N_BASE_URL: ${N8N_BASE_URL:-http://n8n:5678}
       N8N_WEBHOOK_SECRET: ${N8N_WEBHOOK_SECRET:-}
+      N8N_SERVICE_NAME: ${N8N_SERVICE_NAME:-n8n-aging-review-monitor}
+      N8N_SERVICE_TOKEN_HASH: ${N8N_SERVICE_TOKEN_HASH:-}
       N8N_TIMEOUT_SECONDS: ${N8N_TIMEOUT_SECONDS:-5}
       AGING_REVIEW_THRESHOLD_MINUTES: ${AGING_REVIEW_THRESHOLD_MINUTES:-60}
     volumes:
@@ -80,6 +82,7 @@ services:
       N8N_PROTOCOL: http
       N8N_SECURE_COOKIE: "false"
       N8N_PERSONALIZATION_ENABLED: "false"
+      INVOICEFLOW_N8N_SERVICE_TOKEN: ${INVOICEFLOW_N8N_SERVICE_TOKEN:-}
     volumes:
       - n8n_data:/home/node/.n8n
     restart: unless-stopped

@@ -18,6 +18,11 @@ from app.schemas.review_cases import (
     ReviewCaseResponse,
     ReviewValidationSummary,
 )
+from app.services.authorization import (
+    AuthorizationContext,
+    require_review_queue,
+    require_review_read,
+)
 from app.services.business_validation import FinalValidationDecision
 from app.services.review_cases import (
     ReviewCaseRead,
@@ -34,6 +39,7 @@ _MAX_LIMIT = 100
 @router.get("", response_model=ReviewCasePageResponse)
 def list_review_cases_endpoint(
     session: Annotated[Session, Depends(get_db)],
+    principal: Annotated[AuthorizationContext, Depends(require_review_queue)],
     status_filter: Annotated[ReviewCaseStatus | None, Query(alias="status")] = None,
     resolution: ReviewResolution | None = None,
     workflow_state: WorkflowState | None = None,
@@ -43,6 +49,12 @@ def list_review_cases_endpoint(
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> ReviewCasePageResponse:
     """Return current actionable cases by default, or explicit history."""
+
+    if principal.is_limited_review_reader:
+        status_filter = ReviewCaseStatus.OPEN
+        resolution = None
+        workflow_state = WorkflowState.NEEDS_REVIEW
+        include_historical = False
 
     page = list_review_cases(
         session,
@@ -66,6 +78,7 @@ def list_review_cases_endpoint(
 def get_review_case_endpoint(
     review_case_id: UUID,
     session: Annotated[Session, Depends(get_db)],
+    _principal: Annotated[AuthorizationContext, Depends(require_review_read)],
 ) -> ReviewCaseDetailResponse:
     """Return current or historical review-case operational context."""
 
