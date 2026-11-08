@@ -2,135 +2,255 @@
 
 [![CI](https://github.com/Mostafa-khaled11/invoiceflow-ai/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/Mostafa-khaled11/invoiceflow-ai/actions/workflows/ci.yml) [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-InvoiceFlow AI is an AI-assisted invoice-processing and human-review workflow
-platform. It combines structured extraction, deterministic financial
-validation, PostgreSQL-backed workflow state, a React review interface, and
-best-effort n8n automation in a reproducible local development stack.
+InvoiceFlow AI is an engineering portfolio project for AI-assisted invoice
+processing. It combines structured document extraction with deterministic
+financial validation, PostgreSQL-backed workflow state, authenticated human
+review, and optional n8n automation.
 
-This repository is a portfolio and development project. It is not presented as
-production-certified software.
+This is a portfolio and development system, not a commercially production-
+certified SaaS product. The repository emphasizes inspectable engineering
+boundaries, reproducibility, security controls, and honest failure handling.
 
-## Problem and solution
+## What the system does
 
-Invoice processing is more than extracting fields from a PDF. A useful system
-must preserve the source document, make uncertainty visible, validate financial
-relationships, route exceptions to a person, and expose an auditable workflow.
+Invoice processing needs more than field extraction. The system preserves the
+source PDF, extracts structured invoice data, validates financial relationships,
+routes exceptions to human review, and records the resulting workflow history.
 
-The current implementation connects:
+Implemented capabilities include:
 
-- Groq structured extraction behind a versioned prompt and schema boundary.
-- Deterministic guardrails and the invoice-validation-v1 business ruleset.
-- PostgreSQL persistence for invoices, extraction results, validation findings,
-  workflow state, review cases, and append-only workflow events.
-- A React/TypeScript review queue and review-detail workflow.
-- Authenticated, post-commit n8n notifications for review-required and
-  review-resolution events.
-- Backend, frontend, browser, security, and infrastructure quality checks.
-- Dedicated PostgreSQL integration verification with clean Alembic migrations.
+- PDF upload validation, private named-volume storage, and SHA-256 duplicate
+  detection.
+- Digital PDF text-layer extraction with `pypdf`; OCR is intentionally out of
+  scope.
+- Versioned Groq structured extraction behind a provider boundary, with shared
+  deterministic guardrails and schema validation.
+- Deterministic financial/business validation with persisted findings and
+  `PASS`, `WARNING`, `REVIEW_REQUIRED`, and `BLOCKED` decisions.
+- Workflow routing, review queues, review detail, and human resolution through
+  `ACCEPT_EXCEPTION` or `REJECT`.
+- Backend OIDC authentication, server-side sessions, CSRF protection, and
+  centralized role-based authorization.
+- Actor-scoped review-command idempotency and authenticated post-commit n8n
+  notifications.
 
-## Implemented capabilities
+The React application is currently an authenticated-backend review workspace;
+frontend OIDC/login integration is deferred.
 
-- PDF intake validation, private named-volume storage, and SHA-256 duplicate
-  prevention.
-- Deterministic digital text-layer extraction with pypdf; OCR is not included.
-- Versioned structured invoice extraction with null-preserving safety behavior.
-- Financial/business validation with persisted rule findings and decisions:
-  PASS, WARNING, REVIEW_REQUIRED, and BLOCKED.
-- Initial workflow routing into READY, NEEDS_REVIEW, or BLOCKED.
-- Human review resolution through ACCEPT_EXCEPTION and REJECT, with idempotency
-  and state-versioned history.
-- Review queue and detail screens with loading, empty, error, retry, and
-  resolution states.
-- Optional n8n workflows for review-required notifications, resolutions, and
-  aging review monitoring.
+## Engineering highlights
 
-## Architecture at a glance
+1. **Modular FastAPI monolith** — HTTP endpoints, domain services, persistence,
+   provider boundaries, and integrations are separated without introducing a
+   worker platform that the current workload does not require.
+2. **Safe AI boundary** — prompt and schema versions are selected through
+   registries; provider output passes through deterministic monetary/date
+   guardrails before `StructuredInvoiceData` validation.
+3. **Financial correctness** — business validation is deterministic and
+   versioned, so model extraction does not silently become a business decision.
+4. **PostgreSQL as source of truth** — SQLAlchemy models, Alembic migrations,
+   foreign keys, uniqueness constraints, and transaction boundaries protect
+   durable workflow state.
+5. **Backend security boundary** — provider-neutral OIDC Authorization Code +
+   PKCE, opaque server-side sessions, CSRF/origin checks, and centralized RBAC
+   are enforced before protected operations.
+6. **Replay-safe review commands** — canonical `review-resolution-v1` SHA-256
+   fingerprints, actor-scoped uniqueness, row locks, and savepoint recovery
+   protect concurrent review resolution.
+7. **Traceable operations** — backend-generated request IDs, validated
+   correlation IDs, sanitized security-audit events, and trusted actor
+   attribution make important security operations inspectable.
+8. **Reproducible verification** — unit tests, isolated PostgreSQL tests,
+   migration smoke tests, frontend tests, Playwright, static analysis,
+   dependency audits, and Compose validation run as explicit quality gates.
 
-~~~mermaid
+## System architecture
+
+```mermaid
 flowchart LR
-    User[Operator] --> UI[React + TypeScript]
-    UI -->|HTTP| API[FastAPI API]
+    Browser[React review workspace] -->|HTTP| Context[Request / correlation context]
+    Context --> API[FastAPI API]
+    API --> Auth[OIDC sessions / RBAC]
     API --> Intake[Invoice intake and private storage]
-    API --> Extract[PDF text and structured extraction]
+    Intake --> Text[PDF text-layer extraction]
+    Text --> Extract[Groq structured extraction]
     Extract --> Guardrails[Deterministic guardrails]
-    Guardrails --> Validate[Business validation]
-    Validate --> Workflow[Workflow routing and review]
-    Intake --> DB[(PostgreSQL)]
-    Validate --> DB
-    Workflow --> DB
-    Workflow -->|post-commit webhook| N8N[n8n automation]
-    Extract -->|server-side only| LLM[Groq provider]
-~~~
+    Guardrails --> Validate[Financial validation]
+    Validate --> Workflow[Workflow routing and human review]
+    Auth --> Audit[(Security audit events)]
+    Context --> Audit
+    Workflow --> Audit
+    Workflow --> DB[(PostgreSQL 17)]
+    Auth --> DB
+    Audit --> DB
+    Workflow -->|authenticated, post-commit, best effort| N8N[n8n automation]
+```
 
-The detailed implementation map is in
-[docs/architecture.md](docs/architecture.md). The original design proposal is
-intentionally preserved in [ARCHITECTURE.md](ARCHITECTURE.md) as historical
-project evidence.
+FastAPI owns application decisions and PostgreSQL is the durable source of
+truth. Groq is called only from the server-side provider boundary. n8n is an
+optional downstream automation boundary and does not own invoice or workflow
+state. The detailed implementation map is in
+[docs/architecture.md](docs/architecture.md).
+
+## Data integrity and security
+
+Review resolution persists the state transition, workflow event, and command
+record in one caller-owned transaction. The command record uses:
+
+- actor scope plus the existing resolution request key as its uniqueness scope;
+- a versioned canonical payload containing operation, invoice, workflow,
+  review-case, decision, and nullable note;
+- compact sorted JSON serialized as UTF-8 and hashed with SHA-256;
+- PostgreSQL row locks and savepoint recovery for insert races.
+
+An identical same-actor replay returns the recorded result without a duplicate
+workflow event or n8n notification. A conflicting reuse of the same key is
+rejected, while a different actor has a separate scope. These controls do not
+claim exactly-once delivery to external webhooks: n8n delivery remains
+authenticated, post-commit, and best effort because no transactional outbox is
+implemented.
+
+Security events use trusted server-side actor identities and explicit metadata
+allowlists. Request IDs are generated by the backend; correlation IDs are
+bounded and validated, never used as authentication. Raw OIDC tokens,
+authorization codes, cookies, session secrets, provider credentials, and free-
+form audit reasons are not persisted. Application behavior is append-only for
+audit records, while database-level privilege hardening and retention policy
+remain deferred. See the [PR-01 security closure](docs/security/pr01-security-closure.md).
+
+## Software engineering practices
+
+- **Separation of concerns:** routes adapt HTTP, services own domain behavior,
+  models define persistence, and providers/integrations are explicit seams.
+- **Type safety:** Python is checked with Pyright and Ruff; TypeScript is
+  compiled and linted in the frontend pipeline.
+- **Explicit state:** workflow states, review status, validation decisions,
+  actor types, and audit event types are constrained rather than inferred from
+  free-form strings.
+- **Dependency injection and test seams:** FastAPI dependencies, SQLAlchemy
+  sessions, fake OIDC/provider boundaries, and intercepted browser APIs keep
+  tests deterministic.
+- **Transactional persistence:** migrations, foreign keys, unique constraints,
+  row locking, rollback behavior, and isolated disposable databases are tested
+  separately from SQLite-only unit coverage.
+- **Reproducibility:** synthetic evaluation data uses deterministic generation;
+  dependency lockfiles and CI checks make environment drift visible.
+- **Secure configuration:** `.env` is ignored, `.env.example` contains
+  placeholders, and secrets are kept server-side rather than in React bundles,
+  workflow exports, or source control.
+
+## Authentication and authorization
+
+The backend implements a provider-neutral OIDC relying-party boundary using
+Authorization Code Flow with PKCE. Successful authentication creates an opaque
+server-side session; only a SHA-256 verifier and session metadata are stored.
+Sessions have idle/absolute expiry, revocation, and logout handling. Logout is
+protected by CSRF and trusted-origin checks.
+
+Authorization is centralized in `AuthorizationContext` and the permission
+matrix. Human actors come from the authenticated local account, while the n8n
+API monitor uses a separately scoped service principal. Request headers, body
+fields, query parameters, and correlation IDs cannot establish actor identity.
+
+The frontend does not yet implement the browser OIDC login flow. Local and CI
+tests use a fake or mocked OIDC boundary; that is test infrastructure, not a
+second application authentication system.
+
+## Testing and CI/CD
+
+The repository separates fast local checks, disposable PostgreSQL verification,
+and browser/frontend checks:
+
+| GitHub Actions job | Main coverage |
+| --- | --- |
+| **Backend quality** | Deterministic dataset generation/validation, Pytest, Ruff, and Pyright |
+| **Frontend quality** | `npm ci`, ESLint, Vitest, coverage, and Vite build |
+| **Browser E2E** | Chromium Playwright review-workspace flows with intercepted APIs |
+| **Dependency security audit** | Python environment/runtime-image and full/production npm audits |
+| **Infrastructure validation** | Docker Compose configuration validation |
+| **PostgreSQL integration** | PostgreSQL 17 service, Alembic migration smoke test, and full suite |
+
+Latest approved local security-closure evidence:
+
+- Full local backend/evaluation suite: **330 passed, 28 skipped, 2 warnings**.
+  Local skips include PostgreSQL-gated tests without `TEST_DATABASE_URL`,
+  optional capability skips, and the intentionally disabled live Groq smoke
+  test.
+- Isolated PostgreSQL integration run: **25 passed, 1 skipped, 331
+  deselected**; the remaining skip was the intentional live Groq smoke test.
+- Fresh isolated Alembic migration smoke: **1 passed, 1 warning**, ending at
+  revision `a7b8c9d0e1f2`.
+- Ruff, Ruff format, Pyright, frontend checks, dependency audits, and Compose
+  validation passed in the recorded quality-gate evidence.
+
+The PostgreSQL run and migration smoke use separate disposable databases. This
+is deliberate: the general test fixture uses `Base.metadata.create_all()` and
+can remove migration-managed tables before an independent migration smoke test.
+The counts above are separate evidence sets and must not be combined. The
+approved [security closure](docs/security/pr01-security-closure.md) records
+the exact procedure and limitations. The merged PR #7 CI checks also passed;
+run CI again for any new change rather than treating historical evidence as a
+current execution.
 
 ## Technology stack
 
 | Area | Technologies |
 | --- | --- |
-| Backend | Python 3.12+, FastAPI, Pydantic Settings, SQLAlchemy, Alembic |
+| API | Python 3.12+, FastAPI, Pydantic, SQLAlchemy 2, Alembic |
 | Frontend | React 19, TypeScript, Vite |
-| AI boundary | Groq structured-output provider, versioned prompts and schema |
-| Database | PostgreSQL 17 |
+| AI boundary | Groq structured extraction, versioned prompts and schema |
+| Database | PostgreSQL 17, psycopg |
 | Automation | n8n webhooks and scheduled workflow |
 | Testing | Pytest, Vitest, React Testing Library, MSW, Playwright |
-| Quality/security | Ruff, Pyright, ESLint, TypeScript build, pip-audit, npm audit |
-| Local infrastructure | Docker Compose, named volumes |
+| Quality/security | Ruff, Pyright, ESLint, TypeScript, pip-audit, npm audit |
+| Local runtime | Docker Compose, named volumes |
 
-## Quick start on Windows PowerShell
+## Quick start
 
-Prerequisites: Docker Desktop with Compose v2, Python 3.12+, and Node.js
-20.19+ (or 22.12+) for host-side checks.
+### Prerequisites
 
-~~~powershell
+- Docker Desktop with Compose v2
+- Python 3.12+ for host-side backend checks
+- Node.js 20.19+ or 22.12+ for host-side frontend checks
+
+### Start the local stack
+
+From the repository root in Windows PowerShell:
+
+```powershell
 Copy-Item .env.example .env
-# Edit POSTGRES_PASSWORD and the matching DATABASE_URL password in .env.
+# Set a local POSTGRES_PASSWORD and matching DATABASE_URL password in .env.
 
-docker compose up --build -d
+docker compose build api frontend
+docker compose up -d db
+docker compose run --rm api alembic upgrade head
+docker compose up -d api frontend
 docker compose ps
+
 Invoke-WebRequest http://localhost:18000/api/v1/health
 Invoke-WebRequest http://localhost:18000/api/v1/ready
-~~~
+```
 
-Open the review UI at http://localhost:5173, API documentation at
-http://localhost:18000/docs, and n8n at http://localhost:5678 when needed.
-These host ports are restricted to loopback by the provided Compose
-configuration; this is local-development hardening, not production HTTPS or
-authentication.
-The browser-visible frontend setting is VITE_API_BASE_URL=http://localhost:18000;
-the internal Compose API hostname is http://api:8000 and must not be used by
-the browser.
+Open the review workspace at <http://localhost:5173> and API documentation at
+<http://localhost:18000/docs>. n8n is available at
+<http://localhost:5678> when explicitly enabled and configured. Compose binds
+these host services to loopback; this is local-development hardening, not
+production HTTPS or deployment security.
 
-Stop the local stack without deleting data:
+The browser-visible API base URL is `http://localhost:18000`. The internal API
+hostname is `http://api:8000` and is used only inside the Compose network.
 
-~~~powershell
+Stop the stack without deleting local data:
+
+```powershell
 docker compose down
-~~~
+```
 
-Use docker compose down -v only when intentionally resetting local database,
-invoice-storage, and n8n data volumes.
+Do not use `docker compose down -v` as routine cleanup: it intentionally deletes
+local PostgreSQL, invoice-storage, and n8n volumes.
 
-### Optional n8n setup
+### Backend checks
 
-Set N8N_ENABLED=true and a local N8N_WEBHOOK_SECRET in .env, start the stack,
-complete n8n's local owner setup, and import the three JSON workflows in
-n8n/workflows/. Configure an n8n Header Auth credential with header
-X-InvoiceFlow-Webhook-Secret. Exported workflows contain no credentials or
-secret values. FastAPI commits workflow state before attempting delivery;
-delivery is best effort and there is currently no transactional outbox.
-
-The live harness is dry-run by default. The previously verified live procedure
-is documented in docs/milestones/7c-quality-gates.md and docs/demo.md. Do not
-rerun it merely to record this demo.
-
-## Development checks
-
-Backend setup and checks from the repository root:
-
-~~~powershell
+```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
@@ -138,160 +258,104 @@ python -m pip install -e ".\backend[dev,evaluation]"
 python -m pytest -q
 python -m ruff check backend
 python -m ruff format --check backend
-pyright backend
-~~~
+python -m pyright backend
+python -m pyright
+```
 
-The full command includes both backend tests and the root-level evaluation
-tests. The default tests use fake providers and isolated SQLite fixtures. They
-do not call Groq, n8n, or customer services. PostgreSQL integration tests are
-environment-dependent and remain skipped unless TEST_DATABASE_URL is provided
-explicitly.
+By default these tests use fake providers and isolated SQLite fixtures. They do
+not call Groq, n8n, or customer services. PostgreSQL-gated tests require an
+explicit `TEST_DATABASE_URL`; use a disposable database and follow the
+separate migration-smoke procedure in the security closure.
 
-Frontend checks:
+### Frontend and security checks
 
-~~~powershell
+```powershell
 Set-Location frontend
 npm ci
 npm run lint
 npm test
 npm run test:coverage
-npx playwright install chromium
-npm run test:e2e
 npm run build
 npm audit --audit-level=high
 npm audit --omit=dev --audit-level=high
-~~~
 
-The browser suite uses synthetic fixtures and intercepted API routes on port
-4173; it does not touch the Docker stack.
-
-Infrastructure and Python security checks:
-
-~~~powershell
 Set-Location ..
 python -m pip install pip-audit==2.10.1
-docker compose config --quiet
 python -m pip_audit --local --format=columns
-~~~
+docker compose config --quiet
+```
 
-See docs/milestones/8b-ci-pipeline.md for the matching GitHub Actions design.
-The initial GitHub-hosted run exposed a clean-checkout evaluation-dataset gap
-and a cross-platform storage-key issue. Milestone 8E.2 added deterministic
-dataset generation and validation before pytest plus portable storage-key
-validation; GitHub-hosted CI Run #2 subsequently passed all five original
-jobs. The release-candidate workflow also includes a dedicated PostgreSQL
-integration job.
+For browser verification, install Chromium with
+`npx playwright install chromium`, then run `npm run test:e2e` from
+`frontend/`. The browser suite uses synthetic fixtures and intercepted API
+routes; it does not require the Docker stack.
 
 ## API surface
 
-All application endpoints are under /api/v1.
+All application endpoints are under `/api/v1`.
 
 | Method | Path | Responsibility |
 | --- | --- | --- |
-| GET | /api/v1/health | Liveness without a database query |
-| GET | /api/v1/ready | PostgreSQL readiness; returns 503 when unavailable |
-| POST | /api/v1/invoices/upload | Validate and persist one PDF |
-| GET | /api/v1/invoices/{id} | Read invoice metadata |
-| POST | /api/v1/invoices/{id}/extract-text | Persist digital text extraction metadata |
-| POST | /api/v1/invoices/{id}/extract-structured | Run configured structured extraction |
-| POST | /api/v1/invoices/{id}/validate | Persist deterministic validation |
-| GET | /api/v1/invoices/{id}/validation | Read current validation findings |
-| POST | /api/v1/invoices/{id}/workflow/route | Create/read current workflow route |
-| GET | /api/v1/invoices/{id}/workflow | Read current workflow state |
-| POST | /api/v1/invoices/{id}/workflow/review | Resolve an open review case |
-| GET | /api/v1/review-cases | List current or historical review cases |
-| GET | /api/v1/review-cases/{id} | Read review and validation context |
+| GET | `/api/v1/health` | Liveness without a database query |
+| GET | `/api/v1/ready` | PostgreSQL readiness; returns 503 when unavailable |
+| POST | `/api/v1/invoices/upload` | Validate and persist one PDF |
+| GET | `/api/v1/invoices/{id}` | Read invoice metadata |
+| POST | `/api/v1/invoices/{id}/extract-text` | Persist digital text extraction metadata |
+| POST | `/api/v1/invoices/{id}/extract-structured` | Run configured structured extraction |
+| POST | `/api/v1/invoices/{id}/validate` | Persist deterministic validation |
+| GET | `/api/v1/invoices/{id}/validation` | Read current validation findings |
+| POST | `/api/v1/invoices/{id}/workflow/route` | Create/read current workflow route |
+| GET | `/api/v1/invoices/{id}/workflow` | Read current workflow state |
+| POST | `/api/v1/invoices/{id}/workflow/review` | Resolve an open review case |
+| GET | `/api/v1/review-cases` | List current or historical review cases |
+| GET | `/api/v1/review-cases/{id}` | Read review and validation context |
 
 ## Project structure
 
-~~~text
+```text
 backend/app/                 FastAPI routes, services, models, schemas, prompts
-backend/tests/               Backend, evaluation, integration, and safety tests
+backend/tests/               Backend, evaluation, integration, and security tests
 backend/alembic/             PostgreSQL migration history
 frontend/src/                React UI, API client, unit/component tests
 frontend/e2e/                Mocked Chromium workflows
 evaluation/                  Synthetic benchmark tooling and diagnostics
 n8n/workflows/               Exported local automation workflows
-docs/                        Current architecture, demo, roadmap, milestones
-.github/workflows/ci.yml     Quality and security pipeline
+docs/                        Architecture, security, demo, roadmap, milestones
+.github/workflows/ci.yml     Six-job quality and security pipeline
 compose.yaml                 Local API, frontend, PostgreSQL, and n8n topology
-~~~
+```
 
-## Security posture
+## Known limitations and deferred work
 
-- .env and other local environment files are ignored; .env.example has
-  placeholders only. No provider key or webhook secret belongs in React,
-  workflow exports, or Git.
-- Accepted PDFs live in a private Docker named volume and are not served as
-  static frontend files.
-- Groq is a server-side provider boundary. Invoice text is passed as document
-  data, not as executable instructions.
-- n8n receives authenticated webhook requests and never accesses PostgreSQL
-  directly.
-- Dependency audits run for local Python dependencies, the API runtime image,
-  and both full and production-only npm trees.
-- The local frontend is bound to loopback by Compose. This stack does not yet
-  provide HTTPS, user authentication, authorization, or production monitoring.
-
-## Latest verified local evidence
-
-The latest local evidence recorded in the milestone reports is:
-
-- Backend and evaluation suite: 269 passed, 15 skipped, 8 warnings in the
-  latest local release-candidate run.
-- Frontend: 10 Vitest tests passed; 4 Chromium Playwright tests passed.
-- Frontend coverage: statements 69.23%, branches 69.23%, functions 60.34%,
-  lines 88.00%.
-- Ruff, Pyright, ESLint, TypeScript/Vite build, npm audits, Python audits, and
-  Compose validation: PASS.
-- Milestone 7B n8n workflow: live-verified previously. GitHub-hosted CI Run #2
-  passed all five original jobs after the Milestone 8E.2 fixes. The current
-  release candidate adds a PostgreSQL integration job and still requires
-  hosted verification after its new commit.
-
-These are local development results, not a claim of production certification
-or remote CI success. Detailed evidence remains in
-docs/milestones/7c-quality-gates.md, 8a-frontend-testing.md, and
-8b-ci-pipeline.md.
-
-## Known limitations
-
-- n8n delivery is post-commit best effort; there is no durable transactional
-  outbox or persistent retry queue.
-- The Docker topology is local-development focused and has no HTTPS, auth,
-  production monitoring, or deployment configuration.
-- Playwright currently targets Chromium only.
-- OCR is intentionally not implemented; PDFs without adequate digital text are
-  classified for future OCR work.
-- The current frontend is a review workspace, not a complete invoice-upload
+- This is a portfolio/development project, not production-certified software.
+- Frontend OIDC/login integration is deferred; backend authentication and RBAC
+  are implemented separately.
+- n8n delivery is authenticated post-commit best effort; there is no durable
+  transactional outbox or persistent retry queue.
+- OCR for image-only PDFs is not implemented.
+- There is no cloud deployment, full production observability, audit read/
+  retention infrastructure, or database-level audit privilege hardening.
+- No administrative role-management HTTP API exists yet.
+- The frontend is a review workspace rather than a complete invoice-upload
   product.
-- AI extraction evaluation remains a synthetic/offline engineering tool rather
-  than a claim of measured production accuracy.
+- Synthetic AI evaluation is an engineering and reproducibility tool, not a
+  claim of production model accuracy.
 
-## Roadmap
+## Documentation and demonstration
 
-The post-release direction is InvoiceFlow AI → Intelligent Invoice Data
-Platform, with Data Engineering first: analytics foundations and quality, then
-BI, AI extraction evaluation, duplicate/anomaly detection, MLOps, and only
-later predictive intelligence when suitable historical data exists. See
-docs/roadmap.md.
+- [Implementation architecture](docs/architecture.md)
+- [PR-01 security architecture](docs/security/pr01-security-architecture.md)
+- [PR-01 API access matrix](docs/security/pr01-api-access-matrix.md)
+- [PR-01 security closure](docs/security/pr01-security-closure.md)
+- [PR-01D audit architecture](docs/security/pr01d-audit-architecture.md)
+- [Portfolio demo walkthrough](docs/demo.md)
+- [Roadmap](docs/roadmap.md)
+- [Synthetic evaluation tooling](evaluation/README.md)
 
-## Product Preview
-
-Synthetic Playwright captures of the implemented review workspace:
-
-![InvoiceFlow AI review queue](docs/assets/review-queue.png)
-
-![InvoiceFlow AI review details](docs/assets/review-detail.png)
-
-## Portfolio walkthrough
-
-The concise 3–5 minute demo script is in docs/demo.md. It uses synthetic,
-mocked frontend data and previously verified n8n evidence; it does not require
-live provider calls or data mutation.
-
-Synthetic portfolio captures are available in
-[docs/assets](docs/assets): [review queue](docs/assets/review-queue.png) and
+The [demo walkthrough](docs/demo.md) uses synthetic and mocked evidence. It
+does not require live provider calls or mutate customer data. Product preview
+captures are available in [docs/assets](docs/assets):
+[review queue](docs/assets/review-queue.png) and
 [review detail](docs/assets/review-detail.png).
 
 ## License
