@@ -23,6 +23,7 @@ from app.models.identity import (
     UserRoleAssignment,
     UserSession,
 )
+from app.services.security_audit import record_security_audit_event
 
 
 def _now() -> datetime:
@@ -76,6 +77,15 @@ def create_user_account(
     )
     session.add(account)
     session.flush()
+    record_security_audit_event(
+        session,
+        event_type="account.created",
+        actor_type="system",
+        actor_id="identity-persistence",
+        target_type="user_account",
+        target_id=account.id,
+        metadata={"account_status": account.status},
+    )
     return account
 
 
@@ -103,6 +113,15 @@ def create_oidc_identity(
     )
     session.add(identity)
     session.flush()
+    record_security_audit_event(
+        session,
+        event_type="identity.linked",
+        actor_type="system",
+        actor_id="identity-persistence",
+        target_type="oidc_identity",
+        target_id=identity.id,
+        metadata={"auth_method": "oidc"},
+    )
     return identity
 
 
@@ -150,6 +169,15 @@ def assign_role(
     assignment = UserRoleAssignment(user_id=user_id, role_id=role_record.id)
     session.add(assignment)
     session.flush()
+    record_security_audit_event(
+        session,
+        event_type="role.granted",
+        actor_type="system",
+        actor_id="identity-persistence",
+        target_type="user_account",
+        target_id=user_id,
+        metadata={"role": role_name},
+    )
     return assignment
 
 
@@ -178,6 +206,15 @@ def revoke_role(
     assignment.revoked_at = revoked_at or _now()
     assignment.revocation_reason = reason
     session.flush()
+    record_security_audit_event(
+        session,
+        event_type="role.revoked",
+        actor_type="system",
+        actor_id="identity-persistence",
+        target_type="user_account",
+        target_id=user_id,
+        metadata={"role": role_name},
+    )
     return assignment
 
 
@@ -239,6 +276,15 @@ def create_session(
     )
     session.add(session_record)
     session.flush()
+    record_security_audit_event(
+        session,
+        event_type="session.created",
+        actor_type="system",
+        actor_id="authentication",
+        target_type="session",
+        target_id=session_record.id,
+        metadata={"auth_method": "oidc"},
+    )
     return session_record
 
 
@@ -281,6 +327,15 @@ def revoke_session(
     session_record.revoked_at = revoked_at or _now()
     session_record.revocation_reason = reason
     session.flush()
+    record_security_audit_event(
+        session,
+        event_type="session.revoked",
+        actor_type="system",
+        actor_id="authentication",
+        target_type="session",
+        target_id=session_record.id,
+        metadata={},
+    )
     return session_record
 
 
@@ -327,6 +382,16 @@ def revoke_user_sessions(
         record.revocation_reason = reason
         count += 1
     session.flush()
+    if count:
+        record_security_audit_event(
+            session,
+            event_type="session.revoked",
+            actor_type="system",
+            actor_id="authentication",
+            target_type="user_account",
+            target_id=user_id,
+            metadata={"session_count": count},
+        )
     return count
 
 

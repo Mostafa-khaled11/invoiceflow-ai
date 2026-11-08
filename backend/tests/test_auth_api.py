@@ -14,6 +14,7 @@ from app.api.deps import get_oidc_client
 from app.core.config import Settings
 from app.db.base import Base
 from app.main import create_app
+from app.models.audit import SecurityAuditEvent
 from app.models.identity import OIDCLoginTransaction, UserAccount, UserSession
 from app.services.identity_persistence import (
     create_oidc_identity,
@@ -170,6 +171,15 @@ def test_login_callback_session_and_csrf_logout_round_trip(auth_context) -> None
         assert transactions[0].consumed_at is not None
         assert state not in transactions[0].state_hash
         assert nonce not in transactions[0].nonce_hash
+        event_types = {
+            event.event_type
+            for event in session.execute(select(SecurityAuditEvent)).scalars()
+        }
+        assert {"auth.login_succeeded", "session.created"} <= event_types
+        assert session_cookie not in " ".join(
+            str(event.meta)
+            for event in session.execute(select(SecurityAuditEvent)).scalars()
+        )
 
     current = client.get("/api/v1/auth/session")
     assert current.status_code == 200
@@ -180,13 +190,19 @@ def test_login_callback_session_and_csrf_logout_round_trip(auth_context) -> None
         headers={"Origin": "http://testserver", "X-CSRF-Token": csrf},
     )
     assert logout.status_code == 204
+    with Session(engine) as session:
+        event_types = {
+            event.event_type
+            for event in session.execute(select(SecurityAuditEvent)).scalars()
+        }
+        assert {"auth.logout", "session.revoked"} <= event_types
     assert client.get("/api/v1/auth/session").status_code == 401
 
 
 def test_callback_rejects_state_mismatch_without_consuming_transaction(
     auth_context,
 ) -> None:
-    client, provider, _engine, _settings = auth_context
+    client, provider, engine, _settings = auth_context
     state, nonce = _login(client)
     provider.nonce = nonce
     provider.id_token = provider.make_token(nonce=nonce)
@@ -196,6 +212,20 @@ def test_callback_rejects_state_mismatch_without_consuming_transaction(
         follow_redirects=False,
     )
     assert rejected.status_code == 400
+    with Session(engine) as session:
+        failure = (
+            session.execute(
+                select(SecurityAuditEvent)
+                .where(SecurityAuditEvent.event_type == "auth.login_failed")
+                .order_by(SecurityAuditEvent.created_at.desc())
+            )
+            .scalars()
+            .first()
+        )
+        assert failure is not None
+        assert failure.actor_type == "system"
+        assert failure.actor_id == "anonymous"
+        assert failure.meta == {"failure_category": "state_mismatch"}
     accepted = client.get(
         f"/api/v1/auth/callback?code=code&state={state}",
         follow_redirects=False,
