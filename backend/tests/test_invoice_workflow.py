@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from typing import Any
-from uuid import UUID, uuid4
+from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 
 import pytest
+from app.models.audit import ReviewCommandIdempotency
 from app.models.invoice_structured_extraction import InvoiceStructuredExtraction
 from app.models.invoice_validation import InvoiceValidation
 from app.models.invoice_workflow import (
@@ -18,6 +19,7 @@ from app.models.invoice_workflow import (
     WorkflowEventType,
     WorkflowState,
 )
+from app.services.authorization import AuthorizationContext, Permission
 from app.services.business_validation import RULESET_VERSION, FinalValidationDecision
 from app.services.invoice_validation import validate_and_persist_invoice
 from app.services.invoice_workflow import (
@@ -27,6 +29,10 @@ from app.services.invoice_workflow import (
     resolve_invoice_review,
     route_invoice_workflow,
     route_validation_decision,
+)
+from app.services.review_command_idempotency import (
+    FINGERPRINT_VERSION,
+    review_resolution_fingerprint,
 )
 from sqlalchemy import Engine, func, select
 from sqlalchemy.exc import SQLAlchemyError
@@ -73,6 +79,16 @@ def _seed_review_route(
     with Session(engine) as session:
         route_invoice_workflow(session, ids[0])
     return ids
+
+
+def _reviewer_principal(account_id: str) -> AuthorizationContext:
+    return AuthorizationContext(
+        principal_type="human",
+        account_id=uuid5(NAMESPACE_URL, account_id),
+        account=None,
+        roles=frozenset(),
+        permissions=frozenset({Permission.REVIEW_RESOLVE}),
+    )
 
 
 @pytest.mark.parametrize(
@@ -457,7 +473,7 @@ def test_review_resolution_persists_transition_and_audit_event(
         assert events[1].from_state == WorkflowState.NEEDS_REVIEW.value
         assert events[1].to_state == expected_state.value
         assert workflow.review_case is not None
-        assert workflow.review_case.reviewer_id is None
+        assert workflow.review_case.reviewer_id == "invoice-workflow"
         assert workflow.review_case.reviewer_note == "Reviewed exception."
 
 
@@ -483,6 +499,128 @@ def test_review_resolution_same_request_is_idempotent(engine: Engine) -> None:
                 select(func.count()).select_from(WorkflowEvent)
             ).scalar_one()
             == 2
+        )
+        command = session.execute(select(ReviewCommandIdempotency)).scalar_one()
+        assert command.fingerprint_version == FINGERPRINT_VERSION
+        assert command.status == "COMPLETED"
+        assert command.result_event_id == first.event_id
+        assert second.event_created is False
+
+
+def test_review_resolution_fingerprint_is_versioned_and_canonical() -> None:
+    invoice_id = UUID("00000000-0000-0000-0000-000000000001")
+    workflow_id = UUID("00000000-0000-0000-0000-000000000002")
+    review_case_id = UUID("00000000-0000-0000-0000-000000000003")
+    first = review_resolution_fingerprint(
+        invoice_id=invoice_id,
+        workflow_id=workflow_id,
+        review_case_id=review_case_id,
+        decision=ReviewResolution.REJECT,
+        note="café",
+    )
+    second = review_resolution_fingerprint(
+        invoice_id=invoice_id,
+        workflow_id=workflow_id,
+        review_case_id=review_case_id,
+        decision=ReviewResolution.REJECT,
+        note="café",
+    )
+    assert first == second
+    assert len(first) == 64
+
+
+def test_review_resolution_same_actor_key_different_command_conflicts(
+    engine: Engine,
+) -> None:
+    invoice_id, _extraction_id, _validation_id = _seed_review_route(engine)
+    with Session(engine) as session:
+        resolve_invoice_review(
+            session,
+            invoice_id,
+            ReviewResolution.ACCEPT_EXCEPTION,
+            "same-key",
+            principal=_reviewer_principal("account-1"),
+        )
+
+    with Session(engine) as session:
+        with pytest.raises(ReviewResolutionError) as exc_info:
+            resolve_invoice_review(
+                session,
+                invoice_id,
+                ReviewResolution.ACCEPT_EXCEPTION,
+                "same-key",
+                note="changed",
+                principal=_reviewer_principal("account-1"),
+            )
+    assert exc_info.value.error_code == "resolution_request_conflict"
+
+
+def test_review_resolution_accepts_explicit_trusted_service_context(
+    engine: Engine,
+) -> None:
+    invoice_id, _extraction_id, _validation_id = _seed_review_route(engine)
+    principal = AuthorizationContext(
+        principal_type="service",
+        account_id=None,
+        account=None,
+        roles=frozenset(),
+        permissions=frozenset({Permission.REVIEW_RESOLVE}),
+        service_name="n8n-aging-review-monitor",
+    )
+    with Session(engine) as session:
+        result = resolve_invoice_review(
+            session,
+            invoice_id,
+            ReviewResolution.REJECT,
+            "service-request",
+            principal=principal,
+        )
+        assert result.state == WorkflowState.REJECTED.value
+
+    with Session(engine) as session:
+        event = (
+            session.execute(
+                select(WorkflowEvent).order_by(WorkflowEvent.sequence_number.desc())
+            )
+            .scalars()
+            .first()
+        )
+        assert event is not None
+        command = session.execute(select(ReviewCommandIdempotency)).scalar_one()
+        assert event.actor_type == "service"
+        assert event.actor_id == "n8n-aging-review-monitor"
+        assert command.actor_scope_key == "service:n8n-aging-review-monitor"
+
+
+def test_review_resolution_same_key_is_actor_scoped_without_result_leak(
+    engine: Engine,
+) -> None:
+    invoice_id, _extraction_id, _validation_id = _seed_review_route(engine)
+    with Session(engine) as session:
+        resolve_invoice_review(
+            session,
+            invoice_id,
+            ReviewResolution.REJECT,
+            "shared-key",
+            principal=_reviewer_principal("account-1"),
+        )
+
+    with Session(engine) as session:
+        with pytest.raises(ReviewResolutionError) as exc_info:
+            resolve_invoice_review(
+                session,
+                invoice_id,
+                ReviewResolution.REJECT,
+                "shared-key",
+                principal=_reviewer_principal("account-2"),
+            )
+    assert exc_info.value.error_code == "resolution_request_conflict"
+    with Session(engine) as session:
+        assert (
+            session.execute(
+                select(func.count()).select_from(ReviewCommandIdempotency)
+            ).scalar_one()
+            == 1
         )
 
 

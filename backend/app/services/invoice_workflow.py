@@ -8,6 +8,8 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from app.core.request_context import get_request_context
+from app.models.audit import ReviewCommandIdempotency
 from app.models.invoice_structured_extraction import InvoiceStructuredExtraction
 from app.models.invoice_validation import InvoiceValidation
 from app.models.invoice_workflow import (
@@ -27,6 +29,13 @@ from app.services.invoice_validation import (
     find_validation_for_extraction,
     resolve_canonical_structured_extraction,
 )
+from app.services.review_command_idempotency import (
+    FINGERPRINT_VERSION,
+    actor_scope_key,
+    review_resolution_fingerprint,
+)
+
+SYSTEM_ACTOR_NAME = "invoice-workflow"
 
 
 class WorkflowRoutingError(RuntimeError):
@@ -70,6 +79,8 @@ class WorkflowRoutingResult:
     created: bool
     event_id: UUID | None = None
     event_created: bool = False
+    request_id: UUID | None = None
+    correlation_id: UUID | None = None
 
     @property
     def review_case_id(self) -> UUID | None:
@@ -173,6 +184,7 @@ def route_invoice_workflow(session: Session, invoice_id: UUID) -> WorkflowRoutin
             from_state=None,
             to_state=state.value,
             actor_type="system",
+            **_request_context_fields(),
             reason="Initial deterministic validation routing",
             meta={"validation_decision": validation.final_decision},
         )
@@ -298,11 +310,11 @@ def resolve_invoice_review(
     resolution_request_id: str,
     note: str | None = None,
     principal: AuthorizationContext | None = None,
-    actor_type: str = "system",
-    actor_id: str | None = None,
 ) -> WorkflowRoutingResult:
     """Resolve the current open review case under the invoice coordination lock."""
 
+    actor_type = "system"
+    actor_id: str | None = SYSTEM_ACTOR_NAME
     if principal is not None:
         if not principal.can(Permission.REVIEW_RESOLVE):
             raise ReviewResolutionError(
@@ -329,10 +341,10 @@ def resolve_invoice_review(
             "A human or service review actor must have an identifier.",
             500,
         )
-    if actor_type == "system" and actor_id is not None:
+    if actor_type == "system" and not actor_id:
         raise ReviewResolutionError(
             "invalid_actor",
-            "System review events cannot have an actor identifier.",
+            "A system review actor must have an explicit identity.",
             500,
         )
 
@@ -392,6 +404,50 @@ def resolve_invoice_review(
                 409,
             )
 
+        try:
+            scope_key = actor_scope_key(actor_type, actor_id)
+        except ValueError as exc:
+            raise ReviewResolutionError(
+                "invalid_actor",
+                "A valid trusted review actor is required.",
+                500,
+            ) from exc
+        command_fingerprint = review_resolution_fingerprint(
+            invoice_id=invoice_id,
+            workflow_id=workflow.id,
+            review_case_id=review_case.id,
+            decision=decision,
+            note=note,
+        )
+        command = session.execute(
+            select(ReviewCommandIdempotency)
+            .where(
+                ReviewCommandIdempotency.actor_scope_key == scope_key,
+                ReviewCommandIdempotency.request_key == resolution_request_id,
+            )
+            .with_for_update()
+        ).scalar_one_or_none()
+        if command is not None:
+            _verify_review_command(command, command_fingerprint)
+            if command.status == "COMPLETED" and command.result_event_id is not None:
+                return _routing_result(
+                    workflow,
+                    validation,
+                    _review_case_from_model(review_case),
+                    False,
+                    command.result_event_id,
+                    False,
+                    command.request_id,
+                    command.correlation_id,
+                )
+            raise ReviewResolutionError(
+                "review_command_in_progress",
+                "The review command is already in progress.",
+                409,
+            )
+
+        # Preserve compatibility for historical resolved cases that predate
+        # durable command rows; do not create a partial idempotency record.
         if review_case.status == ReviewCaseStatus.RESOLVED.value:
             if review_case.resolution_request_id != resolution_request_id:
                 raise ReviewResolutionError(
@@ -423,6 +479,54 @@ def resolve_invoice_review(
                 _review_case_from_model(review_case),
                 False,
             )
+
+        command = ReviewCommandIdempotency(
+            actor_scope_key=scope_key,
+            request_key=resolution_request_id,
+            fingerprint_version=FINGERPRINT_VERSION,
+            command_fingerprint=command_fingerprint,
+            invoice_id=invoice_id,
+            workflow_id=workflow.id,
+            review_case_id=review_case.id,
+            status="PENDING",
+            **_request_context_fields(),
+        )
+        try:
+            with session.begin_nested():
+                session.add(command)
+                session.flush()
+        except IntegrityError as exc:
+            command = session.execute(
+                select(ReviewCommandIdempotency)
+                .where(
+                    ReviewCommandIdempotency.actor_scope_key == scope_key,
+                    ReviewCommandIdempotency.request_key == resolution_request_id,
+                )
+                .with_for_update()
+            ).scalar_one_or_none()
+            if command is None:
+                raise ReviewResolutionError(
+                    "review_persistence_failed",
+                    "The review command could not be stored.",
+                    500,
+                ) from exc
+            _verify_review_command(command, command_fingerprint)
+            if command.status == "COMPLETED" and command.result_event_id is not None:
+                return _routing_result(
+                    workflow,
+                    validation,
+                    _review_case_from_model(review_case),
+                    False,
+                    command.result_event_id,
+                    False,
+                    command.request_id,
+                    command.correlation_id,
+                )
+            raise ReviewResolutionError(
+                "review_command_in_progress",
+                "The review command is already in progress.",
+                409,
+            ) from exc
 
         if workflow.state != WorkflowState.NEEDS_REVIEW.value:
             raise ReviewResolutionError(
@@ -474,10 +578,17 @@ def resolve_invoice_review(
                 to_state=next_state.value,
                 actor_type=actor_type,
                 actor_id=actor_id,
+                **_request_context_fields(),
                 reason="Human review resolution",
                 meta={"resolution_request_id": resolution_request_id},
             )
         )
+        session.flush()
+        command.status = "COMPLETED"
+        command.result_state = next_state.value
+        command.result_resolution = decision.value
+        command.result_event_id = resolution_event.id
+        command.completed_at = now
         session.commit()
         return _routing_result(
             workflow,
@@ -486,6 +597,8 @@ def resolve_invoice_review(
             False,
             resolution_event.id,
             True,
+            resolution_event.request_id,
+            resolution_event.correlation_id,
         )
     except ReviewResolutionError:
         session.rollback()
@@ -529,6 +642,8 @@ def _routing_result(
     created: bool,
     event_id: UUID | None = None,
     event_created: bool = False,
+    request_id: UUID | None = None,
+    correlation_id: UUID | None = None,
 ) -> WorkflowRoutingResult:
     validation_id = validation.id
     return WorkflowRoutingResult(
@@ -544,7 +659,31 @@ def _routing_result(
         created=created,
         event_id=event_id,
         event_created=event_created,
+        request_id=request_id,
+        correlation_id=correlation_id,
     )
+
+
+def _request_context_fields() -> dict[str, UUID | None]:
+    context = get_request_context()
+    if context is None:
+        return {"request_id": None, "correlation_id": None}
+    return {
+        "request_id": context.request_id,
+        "correlation_id": context.correlation_id,
+    }
+
+
+def _verify_review_command(command: ReviewCommandIdempotency, fingerprint: str) -> None:
+    if (
+        command.fingerprint_version != FINGERPRINT_VERSION
+        or command.command_fingerprint != fingerprint
+    ):
+        raise ReviewResolutionError(
+            "resolution_request_conflict",
+            "The resolution request ID was reused with a different command.",
+            409,
+        )
 
 
 def _is_workflow_identity_race(exc: IntegrityError) -> bool:

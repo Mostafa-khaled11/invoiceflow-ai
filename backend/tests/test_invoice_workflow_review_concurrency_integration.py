@@ -161,6 +161,42 @@ def test_concurrent_competing_resolutions_have_one_winner(
         )
 
 
+def test_same_actor_key_collision_across_invoices_recovers_from_unique_race(
+    postgres_engine: Engine,
+) -> None:
+    invoice_ids = [
+        _seed_review_workflow(postgres_engine),
+        _seed_review_workflow(postgres_engine),
+    ]
+    barrier = Barrier(2)
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = [
+            executor.submit(
+                _resolve,
+                postgres_engine,
+                invoice_id,
+                ReviewResolution.REJECT,
+                "cross-invoice-shared-key",
+                barrier,
+            )
+            for invoice_id in invoice_ids
+        ]
+        results = [future.result(timeout=10) for future in futures]
+
+    assert sum(result[0] == "success" for result in results) == 1
+    assert (
+        sum(result == ("error", "resolution_request_conflict") for result in results)
+        == 1
+    )
+    with Session(postgres_engine) as session:
+        assert (
+            session.execute(
+                select(func.count()).select_from(WorkflowEvent)
+            ).scalar_one()
+            == 3
+        )
+
+
 def test_stale_review_action_rechecks_currentness_after_invoice_lock(
     postgres_engine: Engine,
     monkeypatch: pytest.MonkeyPatch,

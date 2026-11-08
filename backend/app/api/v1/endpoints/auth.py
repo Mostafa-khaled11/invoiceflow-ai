@@ -32,6 +32,7 @@ from app.services.identity_persistence import (
     revoke_session,
 )
 from app.services.oidc import OIDCClient, OIDCError
+from app.services.security_audit import record_security_audit_event
 
 router = APIRouter(prefix="/auth")
 
@@ -113,6 +114,20 @@ def _account_payload(account) -> dict[str, str | None]:
     }
 
 
+def _record_auth_failure(session: Session, category: str) -> None:
+    """Persist a sanitized anonymous authentication failure in its own unit."""
+
+    session.rollback()
+    record_security_audit_event(
+        session,
+        event_type="auth.login_failed",
+        actor_type="system",
+        actor_id="anonymous",
+        metadata={"failure_category": category},
+    )
+    session.commit()
+
+
 @router.get("/login")
 def login(
     settings: Annotated[Settings, Depends(get_app_settings)],
@@ -148,9 +163,17 @@ def login(
             expires_at=expires_at,
             created_at=now,
         )
+        record_security_audit_event(
+            session,
+            event_type="auth.login_started",
+            actor_type="system",
+            actor_id="anonymous",
+            metadata={"auth_method": "oidc"},
+        )
         session.commit()
     except OIDCError as exc:
         session.rollback()
+        _record_auth_failure(session, "provider_unavailable")
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="OIDC provider is unavailable",
@@ -183,6 +206,7 @@ def callback(
     _require_oidc(settings)
     provider_error = request.query_params.get("error")
     if provider_error:
+        _record_auth_failure(session, "provider_denied")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="OIDC authorization was not completed",
@@ -190,12 +214,14 @@ def callback(
     code = request.query_params.get("code")
     state = request.query_params.get("state")
     if not code or not state:
+        _record_auth_failure(session, "missing_callback_parameters")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="OIDC callback is missing required parameters",
         )
     cookie_value = request.cookies.get(settings.auth_transaction_cookie_name)
     if not cookie_value:
+        _record_auth_failure(session, "missing_transaction_cookie")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="OIDC transaction is missing or expired",
@@ -203,11 +229,13 @@ def callback(
     try:
         transaction_cookie = open_login_transaction(settings, cookie_value)
     except AuthenticationCookieError as exc:
+        _record_auth_failure(session, "invalid_transaction_cookie")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="OIDC transaction is missing or expired",
         ) from exc
     if not secrets.compare_digest(transaction_cookie.state, state):
+        _record_auth_failure(session, "state_mismatch")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="OIDC callback state is invalid",
@@ -218,13 +246,13 @@ def callback(
         nonce=transaction_cookie.nonce,
     )
     if transaction is None:
-        session.rollback()
+        _record_auth_failure(session, "transaction_unavailable")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="OIDC transaction is missing, expired, or already used",
         )
     if transaction.redirect_uri != settings.oidc_redirect_uri:
-        session.rollback()
+        _record_auth_failure(session, "redirect_uri_mismatch")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="OIDC redirect transaction is invalid",
@@ -240,6 +268,7 @@ def callback(
             nonce=transaction_cookie.nonce,
         )
     except OIDCError as exc:
+        _record_auth_failure(session, "identity_validation_failed")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="OIDC identity validation failed",
@@ -251,12 +280,14 @@ def callback(
         subject=verified.subject,
     )
     if identity is None:
+        _record_auth_failure(session, "identity_not_approved")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="OIDC identity is not approved for this application",
         )
     account = identity.user
     if account.status != UserAccountStatus.ACTIVE.value:
+        _record_auth_failure(session, "account_inactive")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Local account is not active",
@@ -271,6 +302,15 @@ def callback(
         session,
         settings,
         user_id=account.id,
+    )
+    record_security_audit_event(
+        session,
+        event_type="auth.login_succeeded",
+        actor_type="human",
+        actor_id=str(account.id),
+        target_type="user_account",
+        target_id=account.id,
+        metadata={"auth_method": "oidc"},
     )
     session.commit()
 
@@ -345,6 +385,15 @@ def logout(
         session,
         session_id=authenticated.record.id,
         reason="user logout",
+    )
+    record_security_audit_event(
+        session,
+        event_type="auth.logout",
+        actor_type="human",
+        actor_id=str(authenticated.account.id),
+        target_type="session",
+        target_id=authenticated.record.id,
+        metadata={},
     )
     session.commit()
     response = Response(status_code=status.HTTP_204_NO_CONTENT)

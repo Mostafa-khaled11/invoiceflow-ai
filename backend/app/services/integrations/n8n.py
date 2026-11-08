@@ -45,6 +45,10 @@ def deliver_workflow_event(
     review_case = result.review_case
     payload = {
         "event_id": str(result.event_id),
+        "request_id": (None if result.request_id is None else str(result.request_id)),
+        "correlation_id": (
+            None if result.correlation_id is None else str(result.correlation_id)
+        ),
         "event_type": event_type,
         "event_version": "1",
         "occurred_at": datetime.now().astimezone().isoformat(),

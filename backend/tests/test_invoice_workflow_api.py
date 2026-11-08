@@ -3,6 +3,8 @@
 from datetime import timedelta
 from uuid import UUID, uuid4
 
+import pytest
+from app.models.audit import ReviewCommandIdempotency
 from app.models.invoice_structured_extraction import InvoiceStructuredExtraction
 from app.models.invoice_validation import InvoiceValidation
 from app.models.invoice_workflow import (
@@ -329,6 +331,51 @@ def test_review_api_idempotency_and_conflict(client: TestClient) -> None:
     assert conflicting_request.json()["detail"]["code"] == "resolution_request_conflict"
     assert different_request.status_code == 409
     assert different_request.json()["detail"]["code"] == "review_already_resolved"
+
+
+def test_review_api_persists_context_and_suppresses_replay_delivery(
+    client: TestClient,
+    engine: Engine,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.api.v1.endpoints import invoices
+
+    deliveries: list[object] = []
+    monkeypatch.setattr(
+        invoices,
+        "deliver_workflow_event",
+        lambda *args, **kwargs: deliveries.append((args, kwargs)),
+    )
+    invoice_id = _seed_review_workflow(client)
+    deliveries.clear()
+    request_id = str(uuid4())
+    correlation_id = uuid4()
+    url = f"/api/v1/invoices/{invoice_id}/workflow/review"
+    body = {"decision": "REJECT", "resolution_request_id": request_id}
+
+    first = client.post(
+        url,
+        json=body,
+        headers={"X-Correlation-ID": str(correlation_id)},
+    )
+    replay = client.post(url, json=body)
+
+    assert first.status_code == replay.status_code == 200
+    assert len(deliveries) == 1
+    with Session(engine) as session:
+        event = (
+            session.execute(
+                select(WorkflowEvent).order_by(WorkflowEvent.sequence_number.desc())
+            )
+            .scalars()
+            .first()
+        )
+        assert event is not None
+        command = session.execute(select(ReviewCommandIdempotency)).scalar_one()
+        assert event.request_id is not None
+        assert event.correlation_id == correlation_id
+        assert command.request_id == event.request_id
+        assert command.correlation_id == correlation_id
 
 
 def test_review_api_same_key_with_different_note_conflicts(client: TestClient) -> None:

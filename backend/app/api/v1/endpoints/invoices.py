@@ -437,7 +437,7 @@ def resolve_invoice_review_endpoint(
         ) from exc
 
     invoice = session.get(Invoice, invoice_id)
-    if invoice is not None:
+    if invoice is not None and result.event_created:
         deliver_workflow_event(
             result,
             invoice_id,
