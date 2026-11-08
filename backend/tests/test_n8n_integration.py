@@ -11,7 +11,11 @@ from app.services.invoice_workflow import (
 
 
 def _result(
-    *, state: str = "NEEDS_REVIEW", event_created: bool = True
+    *,
+    state: str = "NEEDS_REVIEW",
+    event_created: bool = True,
+    request_id=None,
+    correlation_id=None,
 ) -> WorkflowRoutingResult:
     return WorkflowRoutingResult(
         workflow_id=uuid4(),
@@ -32,6 +36,8 @@ def _result(
         created=event_created,
         event_id=uuid4() if event_created else None,
         event_created=event_created,
+        request_id=request_id,
+        correlation_id=correlation_id,
     )
 
 
@@ -66,7 +72,9 @@ def test_review_required_payload_is_versioned_and_safe(monkeypatch):
 
     monkeypatch.setattr(n8n, "urlopen", fake_urlopen)
     invoice_id = uuid4()
-    source = _result()
+    request_id = uuid4()
+    correlation_id = uuid4()
+    source = _result(request_id=request_id, correlation_id=correlation_id)
     result = n8n.deliver_workflow_event(
         source,
         invoice_id,
@@ -83,6 +91,8 @@ def test_review_required_payload_is_versioned_and_safe(monkeypatch):
     assert payload["event_type"] == "workflow.review_required"
     assert payload["event_version"] == "1"
     assert payload["event_id"] == str(source.event_id)
+    assert payload["request_id"] == str(request_id)
+    assert payload["correlation_id"] == str(correlation_id)
     assert "raw_model_output" not in json.dumps(payload)
     assert (
         captured["request"].get_header("X-invoiceflow-webhook-secret") == "local-secret"

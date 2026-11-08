@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from app.models.audit import ReviewCommandIdempotency, SecurityAuditEvent
@@ -24,7 +24,7 @@ def postgres_engine(engine: Engine) -> Engine:
     return engine
 
 
-def _seed_dependencies(engine: Engine) -> tuple[Invoice, InvoiceWorkflow, ReviewCase]:
+def _seed_dependencies(engine: Engine) -> tuple[UUID, UUID, UUID]:
     validation_id = _seed_validation(engine)
     with Session(engine) as session:
         validation = session.get(InvoiceValidation, validation_id)
@@ -43,8 +43,11 @@ def _seed_dependencies(engine: Engine) -> tuple[Invoice, InvoiceWorkflow, Review
         )
         session.add(review_case)
         session.flush()
-        session.expunge_all()
-        return invoice, workflow, review_case
+        invoice_id = invoice.id
+        workflow_id = workflow.id
+        review_case_id = review_case.id
+        session.commit()
+        return invoice_id, workflow_id, review_case_id
 
 
 def test_audit_tables_and_nullable_event_context_are_registered(engine: Engine) -> None:
@@ -84,14 +87,14 @@ def test_security_audit_event_persists_sanitized_metadata(engine: Engine) -> Non
 def test_review_command_actor_scope_unique_and_distinct_scopes_allowed(
     postgres_engine: Engine,
 ) -> None:
-    invoice, workflow, review_case = _seed_dependencies(postgres_engine)
+    invoice_id, workflow_id, review_case_id = _seed_dependencies(postgres_engine)
     base = dict(
         request_key="00000000-0000-4000-8000-000000000001",
         fingerprint_version="review-resolution-v1",
         command_fingerprint="a" * 64,
-        invoice_id=invoice.id,
-        workflow_id=workflow.id,
-        review_case_id=review_case.id,
+        invoice_id=invoice_id,
+        workflow_id=workflow_id,
+        review_case_id=review_case_id,
         status="COMPLETED",
     )
     with Session(postgres_engine) as session:
@@ -109,7 +112,7 @@ def test_review_command_actor_scope_unique_and_distinct_scopes_allowed(
 def test_review_command_required_constraints_are_database_enforced(
     postgres_engine: Engine,
 ) -> None:
-    invoice, workflow, review_case = _seed_dependencies(postgres_engine)
+    invoice_id, workflow_id, review_case_id = _seed_dependencies(postgres_engine)
     with Session(postgres_engine) as session:
         session.add(
             ReviewCommandIdempotency(
@@ -117,9 +120,9 @@ def test_review_command_required_constraints_are_database_enforced(
                 request_key="request",
                 fingerprint_version="wrong-version",
                 command_fingerprint="a" * 64,
-                invoice_id=invoice.id,
-                workflow_id=workflow.id,
-                review_case_id=review_case.id,
+                invoice_id=invoice_id,
+                workflow_id=workflow_id,
+                review_case_id=review_case_id,
             )
         )
         with pytest.raises(IntegrityError):
